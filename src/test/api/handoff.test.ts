@@ -128,6 +128,15 @@ describe('redeemBrowserHandoff', () => {
 		expect(localStorage.getItem('pt:accessToken')).toBe('"own-pt"');
 	});
 
+	it('leaves a browser signed in only to Torrin as it is', async () => {
+		localStorage.setItem('tr:apiKey', '"tr_own"');
+		const { data } = await create(APP_STATE);
+		await openWith(data.code);
+
+		expect(localStorage.getItem('rd:refreshToken')).toBeNull();
+		expect(localStorage.getItem('tr:apiKey')).toBe('"tr_own"');
+	});
+
 	it('reloads signed out when the code is spent', async () => {
 		const { data } = await create(APP_STATE);
 		await redeem(data.code);

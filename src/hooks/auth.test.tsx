@@ -5,6 +5,7 @@ import { PutioError } from '../services/putio';
 import type * as SimklService from '../services/simkl';
 import type { SimklSession, SimklUser } from '../services/simkl';
 import { SimklError } from '../services/simkl';
+import { TorrinError } from '../services/torrin';
 import traktRefreshRefused from '../test/fixtures/kodi-trackers/trakt-refresh-invalid-grant.json';
 import traktRefreshOk from '../test/fixtures/kodi-trackers/trakt-refresh-ok.json';
 import traktSettings from '../test/fixtures/kodi-trackers/trakt-users-settings.json';
@@ -40,6 +41,7 @@ const {
 	mockGetDebridLinkAccountInfo,
 	mockRefreshDebridLinkToken,
 	mockGetPutioAccountInfo,
+	mockGetTorrinUser,
 	mockGetTraktUser,
 	mockGetSimklSession,
 	mockLogoutSimkl,
@@ -53,6 +55,7 @@ const {
 	mockGetDebridLinkAccountInfo: vi.fn(),
 	mockRefreshDebridLinkToken: vi.fn(),
 	mockGetPutioAccountInfo: vi.fn(),
+	mockGetTorrinUser: vi.fn(),
 	mockGetTraktUser: vi.fn(),
 	mockGetSimklSession: vi.fn(),
 	mockLogoutSimkl: vi.fn(),
@@ -91,6 +94,11 @@ vi.mock('../services/debridLinkOAuth', () => ({
 vi.mock('../services/putio', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../services/putio')>()),
 	getPutioAccountInfo: mockGetPutioAccountInfo,
+}));
+
+vi.mock('../services/torrin', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../services/torrin')>()),
+	getTorrinUser: mockGetTorrinUser,
 }));
 
 vi.mock('../services/trakt', () => ({
@@ -810,6 +818,54 @@ describe('usePutio via useCurrentUser', () => {
 	});
 });
 
+describe('useTorrin via useCurrentUser', () => {
+	beforeEach(() => {
+		window.localStorage.clear();
+		__resetRealDebridStateForTests();
+		vi.clearAllMocks();
+	});
+
+	it('loads the account and keeps the key', async () => {
+		setStoredValue('tr:apiKey', 'tr_key');
+		mockGetTorrinUser.mockResolvedValue({ id: 'u-1', email: 'me@example.com' });
+
+		const { result } = renderHook(() => useCurrentUser());
+
+		await waitFor(() => expect(result.current.trUser).not.toBeNull());
+		expect(result.current.hasTRAuth).toBe(true);
+		expect(result.current.trUser?.email).toBe('me@example.com');
+		expect(mockGetTorrinUser).toHaveBeenCalledWith('tr_key');
+	});
+
+	it('signs out on a 401 only, dropping every tr: key', async () => {
+		setStoredValue('tr:apiKey', 'tr_revoked');
+		mockGetTorrinUser.mockRejectedValue(new TorrinError('x', 'unauthorized', 401));
+
+		const { result } = renderHook(() => useCurrentUser());
+
+		await waitFor(() => expect(window.localStorage.getItem('tr:apiKey')).toBeNull());
+		expect(result.current.trUser).toBeNull();
+		expect(result.current.trError).toBeNull();
+	});
+
+	// A paused or expired plan is a 403 for a key that still works: the key
+	// stays, so renewing the plan is all it takes to be back.
+	it.each([
+		['a refused plan', new TorrinError('x', 'subscription_inactive', 403)],
+		['rate limited', new TorrinError('x', 'rate_limited', 429)],
+		['a server error', new TorrinError('x', 'http_502', 502)],
+		['a network error', new TorrinError('x', 'network')],
+	])('keeps the key on %s', async (_label, failure) => {
+		setStoredValue('tr:apiKey', 'tr_key');
+		mockGetTorrinUser.mockRejectedValue(failure);
+
+		const { result } = renderHook(() => useCurrentUser());
+
+		await waitFor(() => expect(result.current.trError).not.toBeNull());
+		expect(window.localStorage.getItem('tr:apiKey')).not.toBeNull();
+	});
+});
+
 // Fizzy 398: Trakt's tokens lapse (24 h, 7 days in its newer docs) and nothing renewed them, so the
 // card read "Trakt Login" with a working refresh token in storage. Trakt's /oauth/token answers
 // are the live recordings of DMM's own app; /api/trakt/exchange passes them through unchanged
@@ -994,6 +1050,18 @@ describe('useTrakt via useCurrentUser', () => {
 });
 
 describe('useDebridLogin', () => {
+	it('sends Torrin sign-in to its own login page, carrying the return path', () => {
+		routerPush.mockClear();
+
+		const { result } = renderHook(() => useDebridLogin());
+		result.current.loginWithTorrin();
+
+		expect(routerPush).toHaveBeenCalledWith({
+			pathname: '/torrin/login',
+			query: { redirect: '/library' },
+		});
+	});
+
 	it('sends put.io sign-in to its own login page, carrying the return path', () => {
 		routerPush.mockClear();
 

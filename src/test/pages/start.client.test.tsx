@@ -7,6 +7,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import StartPage from '@/pages/start';
 import { GUEST_MODE_KEY } from '@/utils/guestMode';
@@ -36,6 +37,7 @@ vi.mock('@/hooks/auth', () => ({
 	useOffcloudApiKey: vi.fn(),
 	useDebridLinkCredential: vi.fn(),
 	usePutioAccessToken: vi.fn(),
+	useTorrinApiKey: vi.fn(),
 }));
 
 describe('StartPage', () => {
@@ -47,6 +49,7 @@ describe('StartPage', () => {
 	let mockLoginWithOffcloud: any;
 	let mockLoginWithDebridLink: any;
 	let mockLoginWithPutio: any;
+	let mockLoginWithTorrin: any;
 
 	beforeEach(() => {
 		mockPush = vi.fn();
@@ -57,6 +60,7 @@ describe('StartPage', () => {
 		mockLoginWithOffcloud = vi.fn();
 		mockLoginWithDebridLink = vi.fn();
 		mockLoginWithPutio = vi.fn();
+		mockLoginWithTorrin = vi.fn();
 
 		vi.mocked(useRouter).mockReturnValue({
 			push: mockPush,
@@ -73,6 +77,7 @@ describe('StartPage', () => {
 			loginWithOffcloud: mockLoginWithOffcloud,
 			loginWithDebridLink: mockLoginWithDebridLink,
 			loginWithPutio: mockLoginWithPutio,
+			loginWithTorrin: mockLoginWithTorrin,
 		});
 
 		vi.mocked(useRealDebridAccessToken).mockReturnValue([null, false, false]);
@@ -82,6 +87,7 @@ describe('StartPage', () => {
 		vi.mocked(useOffcloudApiKey).mockReturnValue(null);
 		vi.mocked(useDebridLinkCredential).mockReturnValue(null);
 		vi.mocked(usePutioAccessToken).mockReturnValue(null);
+		vi.mocked(useTorrinApiKey).mockReturnValue(null);
 	});
 
 	it('should render the start page correctly', () => {
@@ -110,6 +116,7 @@ describe('StartPage', () => {
 		expect(screen.getByText('Login with Offcloud')).toBeInTheDocument();
 		expect(screen.getByText('Login with Debrid-Link')).toBeInTheDocument();
 		expect(screen.getByText('Login with put.io')).toBeInTheDocument();
+		expect(screen.getByText('Login with Torrin')).toBeInTheDocument();
 	});
 
 	it('should render account creation links', () => {
@@ -137,6 +144,10 @@ describe('StartPage', () => {
 		expect(
 			screen.getByRole('link', { name: 'Create an account with Debrid-Link' })
 		).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Create an account with Torrin' })).toHaveAttribute(
+			'href',
+			'https://torrin.app/'
+		);
 	});
 
 	// It used to say nothing was stored on our servers but Simkl, while the home page
@@ -197,6 +208,9 @@ describe('StartPage', () => {
 
 		fireEvent.click(screen.getByText('Login with put.io'));
 		expect(mockLoginWithPutio).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByText('Login with Torrin'));
+		expect(mockLoginWithTorrin).toHaveBeenCalledTimes(1);
 	});
 
 	it('should redirect to home when user is logged in with Real-Debrid', () => {
@@ -251,6 +265,14 @@ describe('StartPage', () => {
 
 	it('should redirect to home when user is logged in with put.io', () => {
 		vi.mocked(usePutioAccessToken).mockReturnValue('pt-test-token');
+
+		render(<StartPage />);
+
+		expect(mockPush).toHaveBeenCalledWith('/');
+	});
+
+	it('should redirect to home when user is logged in with Torrin', () => {
+		vi.mocked(useTorrinApiKey).mockReturnValue('tr_test-key');
 
 		render(<StartPage />);
 

@@ -108,6 +108,20 @@ describe('/api/tv pairing', () => {
 		expect((await call(poll, { deviceCode })).json).toEqual({ status: 'linked', state: STATE });
 	});
 
+	// Nor can any use Torrin: its key stays in the browser, like put.io's token.
+	it('drops a Torrin key and does not count Torrin as a sign-in', async () => {
+		const { userCode, deviceCode } = await start();
+		expect((await approveWith(userCode, { 'tr:apiKey': '"tr_key"' })).status).toBe(400);
+
+		const approved = await approveWith(userCode, {
+			...STATE,
+			'tr:apiKey': '"tr_key"',
+			'dmm:accounts:tr': '[{"id":"1","keys":{"tr:apiKey":"\\"tr_old\\""}}]',
+		});
+		expect(approved.json).toEqual({ services: ['rd', 'ad'] });
+		expect((await call(poll, { deviceCode })).json).toEqual({ status: 'linked', state: STATE });
+	});
+
 	it('refuses a browser with no debrid sign-in, however much else it holds', async () => {
 		const { userCode, deviceCode } = await start();
 		const refused = await approveWith(userCode, {

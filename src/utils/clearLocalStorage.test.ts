@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { clearDlKeys, clearPtKeys, clearRdKeys } from './clearLocalStorage';
+import { clearDlKeys, clearPtKeys, clearRdKeys, clearTrKeys } from './clearLocalStorage';
 
 describe('clearLocalStorage', () => {
 	let localStorageMock: Storage;
@@ -160,6 +160,25 @@ describe('clearLocalStorage', () => {
 			expect(localStorageMock.removeItem).toHaveBeenCalledWith('pt:accessToken');
 			expect(localStorageMock.removeItem).toHaveBeenCalledWith('pt:somethingLater');
 			expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('dl:accessToken');
+			expect(dispatchEventSpy.mock.calls.some(([e]) => (e as Event).type === 'logout')).toBe(
+				true
+			);
+		});
+	});
+
+	describe('clearTrKeys', () => {
+		// Torrin answers a revoked key with 401; every tr: key goes, and nothing
+		// that belongs to another provider.
+		it('removes every tr: key and nothing else', () => {
+			localStorageMock.setItem('tr:apiKey', 'tr_key');
+			localStorageMock.setItem('tr:somethingLater', 'x');
+			localStorageMock.setItem('pt:accessToken', 'other');
+
+			clearTrKeys();
+
+			expect(localStorageMock.removeItem).toHaveBeenCalledWith('tr:apiKey');
+			expect(localStorageMock.removeItem).toHaveBeenCalledWith('tr:somethingLater');
+			expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('pt:accessToken');
 			expect(dispatchEventSpy.mock.calls.some(([e]) => (e as Event).type === 'logout')).toBe(
 				true
 			);

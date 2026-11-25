@@ -153,6 +153,11 @@ describe('ServiceCard saved accounts', () => {
 			id: 'dl-user',
 			label: 'dl-user',
 		});
+		expect(accountIdentity('tr', { id: 'u-1', email: 'tr@example.com' } as any)).toEqual({
+			id: 'u-1',
+			label: 'tr',
+		});
+		expect(accountIdentity('tr', { id: 'u-2' } as any)).toEqual({ id: 'u-2', label: 'u-2' });
 		expect(accountIdentity('trakt', { user: {} } as any)).toBeNull();
 		expect(accountIdentity('rd', null)).toBeNull();
 	});

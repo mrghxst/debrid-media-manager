@@ -5,6 +5,7 @@ import {
 	PremiumizeUser,
 	PutioUser,
 	RealDebridUser,
+	TorrinUser,
 } from '@/hooks/auth';
 import { debridLinkPremiumDaysLeft, isDebridLinkPremium } from '@/services/debridLink';
 import { isOffcloudPremium } from '@/services/offcloud';
@@ -21,7 +22,7 @@ import Modal from '../components/modals/modal';
 import { SavedAccountsPicker, useSavedAccounts } from './SavedAccountsPicker';
 
 interface ServiceCardProps {
-	service: 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl' | 'pt' | 'trakt' | 'simkl';
+	service: 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl' | 'pt' | 'tr' | 'trakt' | 'simkl';
 	user: RealDebridUser | AllDebridUser | TraktUser | SimklUser | any | null;
 	onTraktLogin: () => void;
 	onLogout: (prefix: string) => void;
@@ -37,6 +38,7 @@ const SERVICE_LABELS: Record<ServiceCardProps['service'], string> = {
 	oc: 'Offcloud',
 	dl: 'Debrid-Link',
 	pt: 'put.io',
+	tr: 'Torrin',
 	trakt: 'Trakt',
 	simkl: 'Simkl',
 };
@@ -55,6 +57,7 @@ const SERVICE_PREFIXES: Record<ServiceCardProps['service'], string> = {
 	oc: 'oc:',
 	dl: 'dl:',
 	pt: 'pt:',
+	tr: 'tr:',
 	trakt: 'trakt:',
 	simkl: 'simkl:',
 };
@@ -68,6 +71,7 @@ const SERVICE_LOGIN_PATHS: Partial<Record<ServiceCardProps['service'], string>> 
 	oc: '/offcloud/login',
 	dl: '/debridlink/login',
 	pt: '/putio/login',
+	tr: '/torrin/login',
 };
 
 /**
@@ -109,6 +113,14 @@ export function accountIdentity(
 		case 'pt':
 			return 'user_id' in user && 'username' in user
 				? { id: String(user.user_id), label: String(user.username) }
+				: null;
+		case 'tr':
+			// The id is the stable part; the email, which Torrin may leave out, only names it.
+			return 'id' in user && typeof user.id === 'string'
+				? {
+						id: user.id,
+						label: typeof user.email === 'string' ? user.email.split('@')[0] : user.id,
+					}
 				: null;
 		default:
 			return null;
@@ -270,6 +282,19 @@ function ServiceCardBody({ service, user, onTraktLogin, onLogout, error }: Servi
         <p><strong>Storage:</strong> ${formatBytes(disk.used)} of ${formatBytes(disk.size)} used, ${formatBytes(disk.avail)} free</p>
         <p><strong>Trash:</strong> ${formatBytes(ptUser.trash_size ?? 0)}, counted in the storage used until emptied</p>
         <p class="mt-2 text-xs">DMM is an integration for put.io; put.io did not make it.</p>
+      </div>
+    `;
+		} else if (service === 'tr' && user && 'id' in user && 'subscription_status' in user) {
+			const trUser = user as TorrinUser;
+			title = 'Torrin';
+			prefix = 'tr:';
+			// Torrin answers the account only while the plan is active (a paused or
+			// expired one is a 403), so a card with a user always has a working plan.
+			html = `
+      <div class="text-left">
+        <p><strong>Email:</strong> ${escapeHtml(trUser.email ?? '')}</p>
+        <p><strong>Plan:</strong> active</p>
+        <p class="mt-2 text-xs">DMM is an integration for Torrin; Torrin did not make it.</p>
       </div>
     `;
 		} else if (service === 'simkl' && user && 'account' in user) {
@@ -594,6 +619,30 @@ function ServiceCardBody({ service, user, onTraktLogin, onLogout, error }: Servi
 				className="haptic w-full rounded border-2 border-[#d946ef] bg-[#d946ef]/30 py-1 text-center text-fuchsia-100 transition-colors hover:bg-[#d946ef]/50"
 			>
 				put.io Login
+			</button>
+		);
+	}
+
+	if (service === 'tr') {
+		const trUser = user as TorrinUser | null;
+		// Torrin's own copper, from its web app. Written out in full because
+		// Tailwind only keeps literal class names.
+		return trUser ? (
+			<button
+				onClick={() => showUserInfo('tr')}
+				className="haptic flex items-center justify-center gap-2 rounded border-2 border-[#c8956c] bg-[#c8956c]/30 p-1 text-orange-100 transition-colors hover:bg-[#c8956c]/50"
+			>
+				<span className="font-medium">Torrin</span>
+				<span>{trUser.email?.split('@')[0]}</span>
+				<Check className="h-4 w-4 text-green-500" />
+			</button>
+		) : (
+			<button
+				type="button"
+				onClick={onTraktLogin}
+				className="haptic w-full rounded border-2 border-[#c8956c] bg-[#c8956c]/30 py-1 text-center text-orange-100 transition-colors hover:bg-[#c8956c]/50"
+			>
+				Torrin Login
 			</button>
 		);
 	}

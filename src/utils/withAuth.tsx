@@ -97,6 +97,11 @@ export const withAuth = <P extends object>(
 			typeof window !== 'undefined' ? localStorage.getItem('pt:accessToken') : null
 		);
 
+		// Torrin's one credential; without it a Torrin-only user bounces to /start.
+		const [trKey] = useState(() =>
+			typeof window !== 'undefined' ? localStorage.getItem('tr:apiKey') : null
+		);
+
 		const isGuest = useGuestMode();
 		// An Easynews login is a sign-in without a debrid account: it opens what a
 		// guest may open (Settings, title pages, DMM Cast for Easynews), never the library.
@@ -120,7 +125,16 @@ export const withAuth = <P extends object>(
 			return false;
 		});
 
-		const hasCredential = !!(rdKey || adKey || tbKey || pmKey || ocKey || dlKey || ptKey);
+		const hasCredential = !!(
+			rdKey ||
+			adKey ||
+			tbKey ||
+			pmKey ||
+			ocKey ||
+			dlKey ||
+			ptKey ||
+			trKey
+		);
 
 		// Signing in ends guest mode. Otherwise the flag outlives the reason it
 		// was set and keeps hiding the library from someone who now has an
@@ -187,6 +201,7 @@ export const withAuth = <P extends object>(
 			ocKey,
 			dlKey,
 			ptKey,
+			trKey,
 			router,
 		]);
 

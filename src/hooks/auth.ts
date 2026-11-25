@@ -14,8 +14,19 @@ import { getCurrentUser as getRealDebridUser, getToken } from '../services/realD
 import type { SimklSession } from '../services/simkl';
 import { SimklError, getSimklSession } from '../services/simkl';
 import { TorBoxUser, getUserData } from '../services/torbox';
+import {
+	getTorrinUser,
+	isTorrinAuthError,
+	type TorrinUser as TorrinAccount,
+} from '../services/torrin';
 import { TraktUser, getTraktUser } from '../services/trakt';
-import { clearDlKeys, clearPtKeys, clearRdKeys, clearTraktKeys } from '../utils/clearLocalStorage';
+import {
+	clearDlKeys,
+	clearPtKeys,
+	clearRdKeys,
+	clearTrKeys,
+	clearTraktKeys,
+} from '../utils/clearLocalStorage';
 import { readStoredAccessToken } from '../utils/rdTokenStorage';
 import { getSafeRedirectPath } from '../utils/router';
 import {
@@ -65,6 +76,12 @@ export type DebridLinkUser = DebridLinkAccountInfo;
  * account with no plan reads `"stranger"` and still signs in (recorded).
  */
 export type PutioUser = PutioAccountInfo;
+
+/**
+ * Torrin's `/v0/store/user`: an id and an email, nothing more. Torrin answers
+ * it only while the plan is active, so having one means the account can add.
+ */
+export type TorrinUser = TorrinAccount;
 
 export interface AllDebridUser {
 	username: string;
@@ -615,6 +632,48 @@ const usePutio = () => {
 	return { user, error, hasAuth: !!token, loading };
 };
 
+/**
+ * Torrin's API key does not expire, so there is no renewal. Only a 401 signs
+ * the user out. A 403 is a paused or expired plan, which keeps the key so the
+ * account works again once the plan does; it settles on the error, as 429, 5xx
+ * and network errors do.
+ */
+const useTorrin = () => {
+	const [user, setUser] = useState<TorrinUser | null>(null);
+	const [error, setError] = useState<Error | null>(null);
+	const [loading, setLoading] = useState(false);
+	const [apiKey] = useLocalStorage<string>('tr:apiKey');
+
+	useEffect(() => {
+		if (!apiKey) return;
+		let isMounted = true;
+		setLoading(true);
+		getTorrinUser(apiKey)
+			.then((info) => {
+				if (!isMounted) return;
+				setUser(info);
+				setError(null);
+				setLoading(false);
+			})
+			.catch((e) => {
+				if (!isMounted) return;
+				if (isTorrinAuthError(e)) {
+					clearTrKeys();
+					setUser(null);
+					setError(null);
+				} else {
+					setError(e as Error);
+				}
+				setLoading(false);
+			});
+		return () => {
+			isMounted = false;
+		};
+	}, [apiKey]);
+
+	return { user, error, hasAuth: !!apiKey, loading };
+};
+
 const TRAKT_ACCESS = 'trakt:accessToken';
 const TRAKT_REFRESH = 'trakt:refreshToken';
 
@@ -915,6 +974,12 @@ export const usePutioAccessToken = () => {
 	return token;
 };
 
+/** The Torrin API key; there is one credential, pasted from Torrin's account page. */
+export const useTorrinApiKey = () => {
+	const [apiKey] = useLocalStorage<string>('tr:apiKey');
+	return apiKey;
+};
+
 // Main hook that combines all services
 export const useCurrentUser = () => {
 	const rd = useRealDebrid();
@@ -924,6 +989,7 @@ export const useCurrentUser = () => {
 	const oc = useOffcloud();
 	const dl = useDebridLink();
 	const pt = usePutio();
+	const tr = useTorrin();
 	const trakt = useTrakt();
 	const simkl = useSimklAuth();
 
@@ -950,6 +1016,9 @@ export const useCurrentUser = () => {
 		ptUser: pt.user,
 		ptError: pt.error,
 		hasPTAuth: pt.hasAuth,
+		trUser: tr.user,
+		trError: tr.error,
+		hasTRAuth: tr.hasAuth,
 		traktUser: trakt.user,
 		traktError: trakt.error,
 		hasTraktAuth: trakt.hasAuth,
@@ -988,5 +1057,6 @@ export const useDebridLogin = () => {
 		loginWithOffcloud: () => navigateToLogin('/offcloud/login'),
 		loginWithDebridLink: () => navigateToLogin('/debridlink/login'),
 		loginWithPutio: () => navigateToLogin('/putio/login'),
+		loginWithTorrin: () => navigateToLogin('/torrin/login'),
 	};
 };

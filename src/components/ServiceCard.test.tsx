@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import putioRecorded from '../test/fixtures/putio/recorded-2026-11-15.json';
 import putioPaid from '../test/fixtures/putio/recorded-paid-2026-11-15.json';
+import torrinFixture from '../test/fixtures/torrin/source-derived-06a40e41.json';
 import { ServiceCard } from './ServiceCard';
 
 const modalControls = vi.hoisted(() => ({
@@ -333,6 +334,37 @@ describe('ServiceCard', () => {
 		expect(
 			screen.getByRole('button', { name: /put\.io/ }).querySelector('.text-green-500')
 		).toBeTruthy();
+	});
+
+	// Torrin answers the account only while its plan works (a paused or expired
+	// one is a 403), so a card with a user is a usable one.
+	it('shows a Torrin account by the name in its email, and says what DMM is to it', async () => {
+		fireMock.mockResolvedValueOnce({ isConfirmed: true });
+		render(
+			<ServiceCard
+				service="tr"
+				user={torrinFixture.user.body.data}
+				onTraktLogin={vi.fn()}
+				onLogout={vi.fn()}
+			/>
+		);
+
+		const card = screen.getByRole('button', { name: /Torrin/ });
+		expect(card).toHaveTextContent('someone');
+		expect(card.querySelector('.text-green-500')).toBeTruthy();
+		await userEvent.click(card);
+		await waitFor(() => expect(fireMock).toHaveBeenCalled());
+		expect(fireMock.mock.calls[0][0].title).toBe('Torrin');
+		expect(fireMock.mock.calls[0][0].html).toContain('someone@example.com');
+		expect(fireMock.mock.calls[0][0].html).toContain('Torrin did not make it');
+	});
+
+	it('offers Torrin sign-in when there is no Torrin account', async () => {
+		const onLogin = vi.fn();
+		render(<ServiceCard service="tr" user={null} onTraktLogin={onLogin} onLogout={vi.fn()} />);
+
+		await userEvent.click(screen.getByRole('button', { name: 'Torrin Login' }));
+		expect(onLogin).toHaveBeenCalledTimes(1);
 	});
 
 	it('presents login buttons when accounts are missing', async () => {

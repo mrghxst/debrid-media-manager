@@ -53,6 +53,17 @@ describe('handleLogout', () => {
 		expect(localStorage.getItem('dl:accessToken')).toBe('keep');
 	});
 
+	it('clears every tr: key for a Torrin logout, and nothing else', async () => {
+		localStorage.setItem('tr:apiKey', 'tr_key');
+		localStorage.setItem('pt:accessToken', 'keep');
+		const router = { reload: vi.fn(), push: vi.fn() };
+
+		await handleLogout('tr:', router);
+
+		expect(localStorage.getItem('tr:apiKey')).toBeNull();
+		expect(localStorage.getItem('pt:accessToken')).toBe('keep');
+	});
+
 	it('clears all keys and navigates to /start when no prefix is provided', async () => {
 		localStorage.setItem('foo', 'bar');
 		const router = { reload: vi.fn(), push: vi.fn() };

@@ -129,6 +129,22 @@ describe('withAuth', () => {
 		expect(mockPush).not.toHaveBeenCalledWith('/start');
 	});
 
+	it('renders wrapped component when authenticated with Torrin', async () => {
+		mockUseRealDebridAccessToken.mockReturnValue([null, false, false]);
+		mockUseAllDebridApiKey.mockReturnValue(null);
+		localStorage.setItem('tr:apiKey', 'tr_test-key');
+
+		const TestComponent = () => <div data-testid="test-component">Test Content</div>;
+		const WrappedComponent = withAuth(TestComponent);
+
+		render(<WrappedComponent />);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('test-component')).toBeInTheDocument();
+		});
+		expect(mockPush).not.toHaveBeenCalledWith('/start');
+	});
+
 	it('renders wrapped component when authenticated with put.io', async () => {
 		mockUseRealDebridAccessToken.mockReturnValue([null, false, false]);
 		mockUseAllDebridApiKey.mockReturnValue(null);

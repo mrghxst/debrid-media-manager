@@ -34,6 +34,7 @@ const DEBRID_KEYS = [
 	'dl:accessToken',
 	'dl:apiKey',
 	'pt:accessToken',
+	'tr:apiKey',
 ];
 
 export function hasDebridAccount(): boolean {

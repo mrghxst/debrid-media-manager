@@ -1,5 +1,5 @@
 import { BackToDashboard, Card, SupportLine } from '@/components/IndexerSetup';
-import { PAIRING_SIGN_IN_KEYS, withoutPutio } from '@/utils/browserStateKeys';
+import { PAIRING_SIGN_IN_KEYS, withoutBrowserOnlyLogins } from '@/utils/browserStateKeys';
 import { collectState } from '@/utils/browserStateSync';
 import { withAuth } from '@/utils/withAuth';
 import { CheckCircle2, Tv } from 'lucide-react';
@@ -91,7 +91,7 @@ function LinkCard() {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					userCode: code,
-					state: withoutPutio(collectState()),
+					state: withoutBrowserOnlyLogins(collectState()),
 					confirmOtherNetwork,
 				}),
 			});

@@ -4,7 +4,7 @@ import {
 	MAX_STATE_BYTES,
 	pickSyncedState,
 	signedInServices,
-	withoutPutio,
+	withoutBrowserOnlyLogins,
 } from '@/utils/browserStateKeys';
 import { getClientIpFromRequest } from '@/utils/clientIp';
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -24,7 +24,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 	if (!userCode) {
 		return res.status(400).json({ error: 'That is not a TV code. It looks like ABCD-EFGH.' });
 	}
-	const state = withoutPutio(pickSyncedState(req.body?.state));
+	const state = withoutBrowserOnlyLogins(pickSyncedState(req.body?.state));
 	if (Buffer.byteLength(JSON.stringify(state)) > MAX_STATE_BYTES) {
 		return res.status(413).json({
 			error: 'This browser holds more DMM settings than a TV can be sent. Try again from another browser.',

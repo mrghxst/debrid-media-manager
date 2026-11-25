@@ -10,6 +10,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { GATEKEEPER_URL } from '@/utils/gatekeeper';
 import {
@@ -34,6 +35,7 @@ export default function StartPage() {
 		loginWithOffcloud,
 		loginWithDebridLink,
 		loginWithPutio,
+		loginWithTorrin,
 	} = useDebridLogin();
 	const [rdToken] = useRealDebridAccessToken();
 	const adKey = useAllDebridApiKey();
@@ -42,14 +44,15 @@ export default function StartPage() {
 	const ocKey = useOffcloudApiKey();
 	const dlKey = useDebridLinkCredential();
 	const ptKey = usePutioAccessToken();
+	const trKey = useTorrinApiKey();
 
 	// Redirect to index if already logged in
 	useEffect(() => {
-		const isLoggedIn = rdToken || adKey || tbKey || pmKey || ocKey || dlKey || ptKey;
+		const isLoggedIn = rdToken || adKey || tbKey || pmKey || ocKey || dlKey || ptKey || trKey;
 		if (isLoggedIn) {
 			router.push('/');
 		}
-	}, [rdToken, adKey, tbKey, pmKey, ocKey, dlKey, ptKey, router]);
+	}, [rdToken, adKey, tbKey, pmKey, ocKey, dlKey, ptKey, trKey, router]);
 
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -246,6 +249,25 @@ export default function StartPage() {
 						rel="noopener noreferrer"
 						aria-label="Create an account with put.io"
 						title="Create an account with put.io"
+					>
+						Create account
+					</a>
+				</div>
+
+				<div className="my-1 grid w-full max-w-sm grid-cols-2 gap-2">
+					<button
+						className="rounded bg-blue-600 px-2 py-2 text-sm text-white hover:bg-blue-700 sm:px-3 sm:text-base"
+						onClick={loginWithTorrin}
+					>
+						Login with Torrin
+					</button>
+					<a
+						className="flex items-center justify-center rounded bg-green-700 px-2 py-2 text-center text-sm text-white hover:bg-green-800 sm:px-3 sm:text-base"
+						href="https://torrin.app/"
+						target="_blank"
+						rel="noopener noreferrer"
+						aria-label="Create an account with Torrin"
+						title="Create an account with Torrin"
 					>
 						Create account
 					</a>

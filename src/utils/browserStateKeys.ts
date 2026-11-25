@@ -26,8 +26,10 @@ export const SYNCED_KEYS = [
 	'dl:accessToken',
 	'dl:refreshToken',
 	'dl:tokenExpiry',
-	// Rides along with another login; put.io is not an identity (no SYNC_SERVICES entry).
+	// Ride along with another login; put.io and Torrin are not identities (no
+	// SYNC_SERVICES entry).
 	'pt:accessToken',
+	'tr:apiKey',
 	'dmm:sponsorToken',
 	'dmm:apiKey',
 	'trakt:accessToken',
@@ -51,20 +53,30 @@ export const SIGN_IN_KEYS = [
 	'dl:accessToken',
 	'dl:apiKey',
 	'pt:accessToken',
+	'tr:apiKey',
 ] as const;
 
 /**
- * The sign-ins a TV or Kodi can use. put.io signs in this browser only: neither DMM
- * Mobile nor the Kodi addon speaks to it, so pairing neither counts its token nor
- * carries it to DMM's server.
+ * The providers that sign in this browser only. Neither DMM Mobile nor the Kodi
+ * addon speaks to put.io or Torrin, so pairing neither counts their credentials
+ * nor carries them to DMM's server.
  */
-export const PAIRING_SIGN_IN_KEYS = SIGN_IN_KEYS.filter((key) => !key.startsWith('pt:'));
+const BROWSER_ONLY_SERVICES = ['pt', 'tr'] as const;
 
-/** Without the put.io token, and without the put.io logins parked by "Add another account". */
-export const withoutPutio = (state: BrowserState): BrowserState =>
-	Object.fromEntries(
-		Object.entries(state).filter(([key]) => !key.startsWith('pt:') && key !== 'dmm:accounts:pt')
+const isBrowserOnlyKey = (key: string) =>
+	BROWSER_ONLY_SERVICES.some(
+		(service) => key.startsWith(`${service}:`) || key === `dmm:accounts:${service}`
 	);
+
+/** The sign-ins a TV or Kodi can use. */
+export const PAIRING_SIGN_IN_KEYS = SIGN_IN_KEYS.filter((key) => !isBrowserOnlyKey(key));
+
+/**
+ * Without the browser-only credentials, and without their logins parked by
+ * "Add another account".
+ */
+export const withoutBrowserOnlyLogins = (state: BrowserState): BrowserState =>
+	Object.fromEntries(Object.entries(state).filter(([key]) => !isBrowserOnlyKey(key)));
 
 /** Prefixes: every `settings:*` flag and the parked logins of the account switcher. */
 export const SYNCED_PREFIXES = ['settings:', 'dmm:accounts:'] as const;

@@ -88,6 +88,7 @@ function IndexPage() {
 		ocUser,
 		dlUser,
 		ptUser,
+		trUser,
 		rdError,
 		adError,
 		tbError,
@@ -95,6 +96,7 @@ function IndexPage() {
 		ocError,
 		dlError,
 		ptError,
+		trError,
 		traktUser,
 		traktError,
 		simklUser,
@@ -106,6 +108,7 @@ function IndexPage() {
 		hasOCAuth,
 		hasDLAuth,
 		hasPTAuth,
+		hasTRAuth,
 		hasTraktAuth,
 		hasSimklAuth,
 		isLoading,
@@ -118,6 +121,7 @@ function IndexPage() {
 		loginWithOffcloud,
 		loginWithDebridLink,
 		loginWithPutio,
+		loginWithTorrin,
 	} = useDebridLogin();
 	const isGuest = useGuestMode();
 	const [browseTerms] = useState(getTerms(2));
@@ -135,6 +139,7 @@ function IndexPage() {
 		(!hasOCAuth || !!ocUser || !!ocError) &&
 		(!hasDLAuth || !!dlUser || !!dlError) &&
 		(!hasPTAuth || !!ptUser || !!ptError) &&
+		(!hasTRAuth || !!trUser || !!trError) &&
 		(!hasTraktAuth || !!traktUser || !!traktError) &&
 		(!hasSimklAuth || !!simklUser || !!simklError);
 
@@ -184,9 +189,10 @@ function IndexPage() {
 		// playback and cast preferences and cannot show, replace or clear a
 		// credential, and "clear site data" drops all seven accounts to fix one.
 		//
-		// Real-Debrid, Debrid-Link and put.io drop their own keys on a rejected
-		// credential (`clearRdKeys` / `clearDlKeys` / `clearPtKeys`, then setting
-		// error to null), so those three only ever reach here on a transient failure and
+		// Real-Debrid, Debrid-Link, put.io and Torrin drop their own keys on a
+		// rejected credential (`clearRdKeys` / `clearDlKeys` / `clearPtKeys` /
+		// `clearTrKeys`, then setting error to null), so those four only ever reach
+		// here on a transient failure, or for Torrin a paused or expired plan, and
 		// Retry really is their answer. The other five park on the card until
 		// the user acts, which is the case this whole flow was built for.
 		if (rdError) {
@@ -210,6 +216,9 @@ function IndexPage() {
 		if (ptError) {
 			toast.error('put.io profile failed. Use the put.io card below.');
 		}
+		if (trError) {
+			toast.error('Torrin profile failed. Use the Torrin card below.');
+		}
 		if (traktError) {
 			toast.error('Trakt profile fetch failed. Use the Trakt card below.');
 		}
@@ -229,7 +238,18 @@ function IndexPage() {
 				toast('Local DB still open. Refresh and retry.', genericToastOptions);
 			};
 		}
-	}, [rdError, adError, tbError, pmError, ocError, dlError, ptError, traktError, simklError]);
+	}, [
+		rdError,
+		adError,
+		tbError,
+		pmError,
+		ocError,
+		dlError,
+		ptError,
+		trError,
+		traktError,
+		simklError,
+	]);
 
 	useEffect(() => {
 		if (rdUser) {
@@ -281,7 +301,8 @@ function IndexPage() {
 		pmError ||
 		ocError ||
 		dlError ||
-		ptError
+		ptError ||
+		trError
 	);
 
 	const debridServiceCards = (
@@ -333,6 +354,13 @@ function IndexPage() {
 				error={ptError}
 				user={ptUser}
 				onTraktLogin={loginWithPutio}
+				onLogout={logout}
+			/>
+			<ServiceCard
+				service="tr"
+				error={trError}
+				user={trUser}
+				onTraktLogin={loginWithTorrin}
 				onLogout={logout}
 			/>
 		</>
