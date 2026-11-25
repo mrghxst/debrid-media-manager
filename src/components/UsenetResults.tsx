@@ -13,6 +13,7 @@ import { downloadCleanNzb } from '@/utils/nzbDownload';
 import { readRdOAuthCredentials } from '@/utils/rdTokenStorage';
 import { fetchTorBoxPlan, PRO_PLAN } from '@/utils/torboxPlan';
 import { sendNzbToTorBox } from '@/utils/torboxUsenet';
+import { sendNzbToTorrin } from '@/utils/torrinUsenet';
 import {
 	describeTransfer,
 	PHASE_STYLES,
@@ -25,7 +26,7 @@ import {
 import type { TvEpisodeMatch } from '@/utils/tvEpisodes';
 import { Check, Download, FileDown, Loader2, RotateCw, Send } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 type UsenetResultsProps = {
@@ -37,6 +38,8 @@ type UsenetResultsProps = {
 	rdKey: string | null;
 	/** Sends a release to TorBox's hosted Usenet instead, once the key reads as Pro. */
 	torboxKey?: string | null;
+	/** Sends a release to Torrin's Usenet downloads; Torrin says when the plan has none. */
+	torrinKey?: string | null;
 	/** Hears the results once a search lands, so the page can count them with its own rows. */
 	onResults?: (results: UsenetResult[]) => void;
 	/** Keeps only the rows whose title passes, e.g. the season page's episode chip. */
@@ -234,6 +237,7 @@ const UsenetResults = ({
 	title,
 	rdKey,
 	torboxKey: torboxLogin = null,
+	torrinKey = null,
 	onResults,
 	rowFilter,
 	episodeReader,
@@ -263,6 +267,8 @@ const UsenetResults = ({
 	const torboxKey = tbPlan === PRO_PLAN ? torboxLogin : null;
 	const [tbSending, setTbSending] = useState<Set<string>>(new Set());
 	const [tbSent, setTbSent] = useState<Set<string>>(new Set());
+	const [trSending, setTrSending] = useState<Set<string>>(new Set());
+	const [trSent, setTrSent] = useState<Set<string>>(new Set());
 	// Releases someone has already fetched or is fetching, so the row shows where
 	// that stands instead of a Send the server would only reject as a duplicate.
 	const [transferred, setTransferred] = useState<Map<string, Nzb2rdTransferSummary>>(new Map());
@@ -469,6 +475,39 @@ const UsenetResults = ({
 		}
 	};
 
+	// Torrin answers at once as well: the release is ready, or it is downloading.
+	const sendToTorrin = async (result: UsenetResult) => {
+		if (!torrinKey || trSending.has(result.id) || trSent.has(result.id)) return;
+
+		setTrSending((prev) => new Set(prev).add(result.id));
+		const toastId = toast.loading('Usenet → Torrin: sending the NZB…', {
+			duration: TRANSFER_STEP_TOAST_MS,
+		});
+		try {
+			const status = await sendNzbToTorrin(torrinKey, result.id, result.title);
+			setTrSent((prev) => new Set(prev).add(result.id));
+			toast.success(
+				status === 'downloaded'
+					? 'Usenet → Torrin: Torrin already had it, it is ready in your library.'
+					: 'Usenet → Torrin: Torrin is downloading it.',
+				{ id: toastId, duration: TRANSFER_TOAST_MS }
+			);
+		} catch (e) {
+			// The client's messages already name Torrin ("Torrin: your plan does not…").
+			const message = e instanceof Error ? e.message : 'send failed';
+			toast.error(`Usenet → ${/^Torrin\b/.test(message) ? message : `Torrin: ${message}`}`, {
+				id: toastId,
+				duration: TRANSFER_TOAST_MS,
+			});
+		} finally {
+			setTrSending((prev) => {
+				const next = new Set(prev);
+				next.delete(result.id);
+				return next;
+			});
+		}
+	};
+
 	// Saving the release instead of sending it. Same articles, so the same
 	// download — but the file that lands has been rebuilt without the indexer's
 	// per-download watermark, so nothing in it points back at the account that
@@ -505,21 +544,31 @@ const UsenetResults = ({
 	// first client render; searching then would ask for "undefined" and come back 400.
 	if (!imdbId) return null;
 
+	const sendTargets = [
+		// The hyphen is a break opportunity, so a narrow screen would otherwise
+		// split the service name across two lines as "Real-" / "Debrid".
+		rdKey && (
+			<span key="rd" className="whitespace-nowrap">
+				Real-Debrid
+			</span>
+		),
+		torboxKey && 'TorBox',
+		torrinKey && 'Torrin',
+	].filter(Boolean);
+
 	return (
 		<ReleaseSection
 			heading={
-				// Without Real-Debrid or TorBox the only thing a row can do is save the NZB.
-				rdKey && torboxKey ? (
+				// Without a service to send to, the only thing a row can do is save the NZB.
+				sendTargets.length > 0 ? (
 					<>
-						Send to <span className="whitespace-nowrap">Real-Debrid</span> or TorBox
-					</>
-				) : torboxKey ? (
-					'Send to TorBox'
-				) : rdKey ? (
-					// The hyphen is a break opportunity, so a narrow screen would otherwise
-					// split the service name across two lines as "Real-" / "Debrid".
-					<>
-						Send to <span className="whitespace-nowrap">Real-Debrid</span>
+						Send to{' '}
+						{sendTargets.map((target, index) => (
+							<Fragment key={index}>
+								{index > 0 && (index === sendTargets.length - 1 ? ' or ' : ', ')}
+								{target}
+							</Fragment>
+						))}
 					</>
 				) : (
 					'Download NZB'
@@ -564,21 +613,29 @@ const UsenetResults = ({
 						</p>
 					)}
 
-					{!rdKey && !torboxKey && kept.length > 0 && !isLoading && !error && (
-						<p className="px-2 py-2 text-sm text-gray-400">
-							<Link
-								href="/realdebrid/login"
-								className="text-blue-400 hover:underline"
-							>
-								Log in with Real-Debrid
-							</Link>{' '}
-							or{' '}
-							<Link href="/torbox/login" className="text-blue-400 hover:underline">
-								TorBox
-							</Link>{' '}
-							to send these to your library.
-						</p>
-					)}
+					{!rdKey &&
+						!torboxKey &&
+						!torrinKey &&
+						kept.length > 0 &&
+						!isLoading &&
+						!error && (
+							<p className="px-2 py-2 text-sm text-gray-400">
+								<Link
+									href="/realdebrid/login"
+									className="text-blue-400 hover:underline"
+								>
+									Log in with Real-Debrid
+								</Link>{' '}
+								or{' '}
+								<Link
+									href="/torbox/login"
+									className="text-blue-400 hover:underline"
+								>
+									TorBox
+								</Link>{' '}
+								to send these to your library.
+							</p>
+						)}
 				</>
 			}
 			rows={!isLoading && !error ? kept : []}
@@ -666,6 +723,29 @@ const UsenetResults = ({
 								TorBox
 							</button>
 						)}
+						{torrinKey && (
+							<button
+								type="button"
+								onClick={() => sendToTorrin(result)}
+								disabled={trSending.has(result.id) || trSent.has(result.id)}
+								title="Send to your Torrin Usenet downloads"
+								aria-label={`Send ${result.title} to Torrin`}
+								className={`haptic flex items-center gap-1 rounded border px-2 py-1 transition-colors duration-200 disabled:cursor-not-allowed ${
+									trSent.has(result.id)
+										? 'border-green-500 bg-green-900/30 text-green-100 disabled:opacity-60'
+										: 'border-gray-500 bg-gray-800/60 text-gray-100 hover:bg-gray-700/50 disabled:opacity-60'
+								} ${rdKey || torboxKey ? 'shrink-0' : 'flex-1'}`}
+							>
+								{trSending.has(result.id) ? (
+									<Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+								) : trSent.has(result.id) ? (
+									<Check className="h-3 w-3 shrink-0" />
+								) : (
+									<Send className="h-3 w-3 shrink-0" />
+								)}
+								Torrin
+							</button>
+						)}
 						{/* Always live, unlike Send: a release someone else already
 											    fetched is still one this user can save, and no Real-Debrid
 											    login is involved either way. */}
@@ -676,7 +756,7 @@ const UsenetResults = ({
 							title="Download the NZB, cleaned of the indexer’s watermark"
 							aria-label={`Download clean NZB for ${result.title}`}
 							className={`haptic flex items-center gap-1 rounded border border-gray-500 bg-gray-800/60 px-2 text-gray-100 transition-colors duration-200 hover:bg-gray-700/50 disabled:cursor-not-allowed disabled:opacity-60 ${
-								rdKey || torboxKey ? 'shrink-0' : 'flex-1 py-1'
+								rdKey || torboxKey || torrinKey ? 'shrink-0' : 'flex-1 py-1'
 							}`}
 						>
 							{downloadingIds.has(result.id) ? (
@@ -685,7 +765,7 @@ const UsenetResults = ({
 								<FileDown className="h-3.5 w-3.5" />
 							)}
 							{/* The row's only button then, so it says what it is. */}
-							{!rdKey && !torboxKey && 'NZB'}
+							{!rdKey && !torboxKey && !torrinKey && 'NZB'}
 						</button>
 					</>
 				);

@@ -7,6 +7,7 @@ import {
 	TorrinError,
 	_testing,
 	addTorrinMagnet,
+	addTorrinNewz,
 	checkTorrinCache,
 	deleteTorrinMagnet,
 	getTorrinMagnet,
@@ -380,6 +381,48 @@ describe('adding', () => {
 	it('refuses an answer without a download id', async () => {
 		fetchMock.mockResolvedValueOnce(reply({ data: { status: 'queued' } }));
 		await expect(addTorrinMagnet(KEY, MAGNET)).rejects.toMatchObject({
+			code: 'invalid_response',
+		});
+	});
+});
+
+describe('adding an NZB', () => {
+	const NZB = new Blob(['<nzb/>'], { type: 'application/x-nzb' });
+
+	it('uploads it as a multipart file, leaving the Content-Type to the browser', async () => {
+		fetchMock.mockResolvedValueOnce(
+			reply({ data: { id: 'a1b2', hash: 'a1b2', status: 'queued' } }, 201)
+		);
+		const added = await addTorrinNewz(KEY, NZB, 'Some.Release.nzb');
+
+		expect(call(0)).toMatchObject({ path: `${_testing.STORE_PATH}/newz`, method: 'POST' });
+		expect(call(0).headers.Authorization).toBe(`Bearer ${KEY}`);
+		expect(Object.keys(call(0).headers).map((name) => name.toLowerCase())).not.toContain(
+			'content-type'
+		);
+		const file = (call(0).body as FormData).get('file') as File;
+		expect(file.name).toBe('Some.Release.nzb');
+		expect(added).toEqual({ id: 'a1b2', status: 'queued' });
+	});
+
+	it('reads one Torrin already holds as downloaded', async () => {
+		fetchMock.mockResolvedValueOnce(reply({ data: { id: 'a1b2', status: 'downloaded' } }, 201));
+		expect((await addTorrinNewz(KEY, NZB, 'x.nzb')).status).toBe('downloaded');
+	});
+
+	it('shows Torrin’s reason for a plan without Usenet', async () => {
+		fetchMock.mockResolvedValueOnce(
+			reply({ error: { code: 403, message: 'your plan does not include usenet' } }, 403)
+		);
+		await expect(addTorrinNewz(KEY, NZB, 'x.nzb')).rejects.toMatchObject({
+			status: 403,
+			message: 'Torrin: your plan does not include usenet',
+		});
+	});
+
+	it('refuses an answer without a download id', async () => {
+		fetchMock.mockResolvedValueOnce(reply({ data: { status: 'queued' } }, 201));
+		await expect(addTorrinNewz(KEY, NZB, 'x.nzb')).rejects.toMatchObject({
 			code: 'invalid_response',
 		});
 	});

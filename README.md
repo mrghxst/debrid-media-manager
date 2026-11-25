@@ -40,7 +40,8 @@ Watch or Cast for put.io yet.
 **Torrin** signs in with a pasted API key; make one with login allowed off. Search and hash lists check
 Torrin's cache and mark only what it calls cached. An add of anything else starts a download counted
 against your plan. The library lists your downloads; file links are signed for a day, so DMM never stores
-them and warns before you export them. There is no Watch or Cast for Torrin yet.
+them and warns before you export them. The Usenet tab sends NZBs to Torrin too. There is no Watch or Cast
+for Torrin yet.
 
 ### Torrent search
 

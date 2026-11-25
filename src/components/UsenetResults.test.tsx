@@ -21,6 +21,10 @@ vi.mock('@/utils/torboxPlan', async (importOriginal) => ({
 	...(await importOriginal<typeof import('@/utils/torboxPlan')>()),
 	fetchTorBoxPlan: (...args: unknown[]) => fetchTorBoxPlanMock(...args),
 }));
+const sendNzbToTorrinMock = vi.fn();
+vi.mock('@/utils/torrinUsenet', () => ({
+	sendNzbToTorrin: (...args: unknown[]) => sendNzbToTorrinMock(...args),
+}));
 const sendNzbToTorBoxMock = vi.fn();
 vi.mock('@/utils/torboxUsenet', () => ({
 	sendNzbToTorBox: (...args: unknown[]) => sendNzbToTorBoxMock(...args),
@@ -1031,6 +1035,89 @@ describe('UsenetResults — TorBox', () => {
 		expect(tbButtons()).toHaveLength(0);
 		expect(screen.queryByText('Send to TorBox')).not.toBeInTheDocument();
 		expect(screen.getByText('Download NZB')).toBeInTheDocument();
+	});
+});
+
+describe('UsenetResults — Torrin', () => {
+	const openPanel = async (rdKey: string | null, torrinKey: string | null) => {
+		mockSearch();
+		render(<UsenetResults imdbId="tt1418646" rdKey={rdKey} torrinKey={torrinKey} />);
+		await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+	};
+	const trButtons = () => screen.queryAllByRole('button', { name: /^send .* to torrin$/i });
+
+	it('lets a Torrin-only member send a release, with the row title and their key', async () => {
+		sendNzbToTorrinMock.mockResolvedValue('queued');
+		await openPanel(null, 'tr-key');
+
+		expect(screen.getByText('Send to Torrin')).toBeInTheDocument();
+		expect(screen.queryByText(/log in with real-debrid/i)).not.toBeInTheDocument();
+		await userEvent.click(trButtons()[0]);
+
+		expect(sendNzbToTorrinMock).toHaveBeenCalledWith('tr-key', 'b', 'Alpha.Release.2160p');
+		await waitFor(() =>
+			expect(toastSuccess).toHaveBeenCalledWith(
+				'Usenet → Torrin: Torrin is downloading it.',
+				expect.anything()
+			)
+		);
+		expect(trButtons()[0]).toBeDisabled();
+	});
+
+	it('says a release Torrin already held is ready', async () => {
+		sendNzbToTorrinMock.mockResolvedValue('downloaded');
+		await openPanel(null, 'tr-key');
+
+		await userEvent.click(trButtons()[0]);
+
+		await waitFor(() =>
+			expect(toastSuccess).toHaveBeenCalledWith(
+				expect.stringContaining('already had it'),
+				expect.anything()
+			)
+		);
+	});
+
+	// Torrin has no way to ask whether a plan includes Usenet, so its own refusal says so.
+	it('shows Torrin’s refusal and leaves the row clickable', async () => {
+		sendNzbToTorrinMock.mockRejectedValue(
+			new Error('Torrin: your plan does not include usenet')
+		);
+		await openPanel(null, 'tr-key');
+
+		await userEvent.click(trButtons()[0]);
+
+		await waitFor(() =>
+			expect(toastError).toHaveBeenCalledWith(
+				'Usenet → Torrin: your plan does not include usenet',
+				expect.anything()
+			)
+		);
+		expect(trButtons()[0]).toBeEnabled();
+	});
+
+	it('names every service in the heading for a member logged in to more than one', async () => {
+		fetchTorBoxPlanMock.mockResolvedValue(2);
+		mockSearch();
+		render(
+			<UsenetResults
+				imdbId="tt1418646"
+				rdKey="rd-key"
+				torboxKey="tb-key"
+				torrinKey="tr-key"
+			/>
+		);
+		await waitFor(() =>
+			expect(screen.getByText(/TorBox or Torrin/).textContent).toBe(
+				'Send to Real-Debrid, TorBox or Torrin'
+			)
+		);
+		expect(trButtons()).toHaveLength(RESULTS.length);
+	});
+
+	it('offers no Torrin button without a Torrin login', async () => {
+		await openPanel('rd-key', null);
+		expect(trButtons()).toHaveLength(0);
 	});
 });
 

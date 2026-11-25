@@ -234,6 +234,8 @@ interface RequestOptions {
 	method?: 'GET' | 'POST' | 'DELETE';
 	query?: Record<string, string>;
 	json?: unknown;
+	/** A multipart body; the browser sets its Content-Type with the boundary. */
+	form?: FormData;
 }
 
 /**
@@ -243,7 +245,7 @@ interface RequestOptions {
 async function trRequest<T>(
 	apiKey: string,
 	path: string,
-	{ method = 'GET', query, json }: RequestOptions = {}
+	{ method = 'GET', query, json, form }: RequestOptions = {}
 ): Promise<T> {
 	// An empty key would only earn a 401 that reads as "signed out".
 	if (!apiKey.trim()) throw new TorrinError('No Torrin API key is set.', 'missing_key');
@@ -266,6 +268,7 @@ async function trRequest<T>(
 				...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
 			},
 			...(json === undefined ? {} : { body: JSON.stringify(json) }),
+			...(form === undefined ? {} : { body: form }),
 			signal: controller.signal,
 		});
 	} catch {
@@ -462,6 +465,32 @@ export async function addTorrinMagnet(apiKey: string, magnetOrHash: string): Pro
  */
 export async function deleteTorrinMagnet(apiKey: string, id: string): Promise<void> {
 	await trRequest<undefined>(apiKey, `/magnets/${pathId(id)}`, { method: 'DELETE' });
+}
+
+/**
+ * Adds one NZB to the account's Usenet downloads, uploaded as a file.
+ *
+ * Torrin dedupes per account and release, so a second send answers with the
+ * download it already has. One it already holds comes back `downloaded`. The
+ * download then lists with the magnets, so the library shows it. A plan
+ * without Usenet is a 403 that says so; an NZB that does not parse is a 400;
+ * one over the plan's size limit is a 422; the 429s are the magnets' ones.
+ */
+export async function addTorrinNewz(
+	apiKey: string,
+	nzb: Blob,
+	filename: string
+): Promise<{ id: string; status: TorrinMagnetStatus }> {
+	const form = new FormData();
+	form.append('file', nzb, filename);
+	const added = await trRequest<{ id?: unknown; status?: unknown } | undefined>(apiKey, '/newz', {
+		method: 'POST',
+		form,
+	});
+	if (typeof added?.id !== 'string' || !added.id) {
+		throw new TorrinError('Torrin answered without a download id.', 'invalid_response');
+	}
+	return { id: added.id, status: torrinMagnetStatus({ status: added.status as string }) };
 }
 
 /** A download's status, with one this client does not know yet read as `queued`. */

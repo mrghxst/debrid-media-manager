@@ -2280,6 +2280,7 @@ const TvSearch: FunctionComponent = () => {
 						title={showInfo.title}
 						rdKey={rdKey}
 						torboxKey={torboxKey}
+						torrinKey={torrinKey}
 						onResults={handleUsenetResults}
 						rowFilter={usenetRowFilter}
 						episodeReader={episodeReader}
