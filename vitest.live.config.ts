@@ -18,6 +18,7 @@ import { defineConfig } from 'vitest/config';
  *
  *	DL_LIVE_TOKEN=<token> npx vitest run --config vitest.live.config.ts
  *	PUTIO_LIVE_TOKEN=<token> npx vitest run --config vitest.live.config.ts
+ *	TORRIN_LIVE_KEY=<key> npx vitest run --config vitest.live.config.ts
  *
  * Without the token the suite skips itself, which is why these files are kept
  * out of the default `include` rather than relying on that skip: a token in the

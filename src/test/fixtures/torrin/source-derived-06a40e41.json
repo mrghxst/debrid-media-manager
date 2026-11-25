@@ -1,0 +1,249 @@
+{
+	"add-cached": {
+		"body": {
+			"data": {
+				"added_at": "2026-11-20T18:02:11Z",
+				"files": [
+					{
+						"index": 0,
+						"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_0/big_buck_bunny_1080p.mkv?exp=placeholder&sig=placeholder",
+						"name": "big_buck_bunny_1080p.mkv",
+						"path": "/big_buck_bunny_1080p.mkv",
+						"size": 276134947
+					}
+				],
+				"hash": "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c",
+				"id": "01936f0e-7a10-7c3e-9b1a-000000000011",
+				"magnet": "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny",
+				"name": "Big Buck Bunny",
+				"private": false,
+				"size": 276134947,
+				"status": "downloaded"
+			}
+		},
+		"status": 200
+	},
+	"add-invalid-magnet": {
+		"body": { "error": { "code": 400, "message": "invalid magnet" } },
+		"status": 400
+	},
+	"add-monthly-limit": {
+		"body": {
+			"error": { "code": 429, "message": "monthly download limit reached, resets on the 1st" }
+		},
+		"status": 429
+	},
+	"add-paid-release": {
+		"body": { "error": { "code": 403, "message": "this release requires a paid plan" } },
+		"status": 403
+	},
+	"add-queue-full": {
+		"body": { "error": { "code": 429, "message": "download queue full" } },
+		"status": 429
+	},
+	"add-queued": {
+		"body": {
+			"data": {
+				"added_at": "2026-11-20T18:04:40Z",
+				"files": [],
+				"hash": "209c8226b299b308beaf2b9cd3fb49212dbd13ec",
+				"id": "01936f0e-7a10-7c3e-9b1a-000000000012",
+				"magnet": "magnet:?xt=urn:btih:209c8226b299b308beaf2b9cd3fb49212dbd13ec",
+				"name": "",
+				"private": false,
+				"size": 0,
+				"status": "queued"
+			}
+		},
+		"status": 200
+	},
+	"bad-key": {
+		"body": { "error": { "code": 401, "message": "invalid api key" } },
+		"status": 401
+	},
+	"check-mixed": {
+		"body": {
+			"data": {
+				"items": [
+					{
+						"files": [
+							{
+								"index": 0,
+								"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_0/big_buck_bunny_1080p.mkv?exp=placeholder&sig=placeholder",
+								"media_info": {
+									"duration_sec": 596.5,
+									"height": 1080,
+									"resolution": "1080p",
+									"video_codec": "h264",
+									"width": 1920
+								},
+								"name": "big_buck_bunny_1080p.mkv",
+								"path": "/big_buck_bunny_1080p.mkv",
+								"size": 276134947
+							}
+						],
+						"hash": "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c",
+						"magnet": "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny",
+						"name": "Big Buck Bunny",
+						"status": "cached"
+					},
+					{
+						"files": [],
+						"hash": "08ada5a7a6183aae1e09d831df6748d566095a10",
+						"magnet": "magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10",
+						"name": "",
+						"status": "acceleratable"
+					},
+					{
+						"files": [],
+						"hash": "209c8226b299b308beaf2b9cd3fb49212dbd13ec",
+						"magnet": "magnet:?xt=urn:btih:209c8226b299b308beaf2b9cd3fb49212dbd13ec",
+						"name": "",
+						"status": "unknown"
+					}
+				]
+			}
+		},
+		"status": 200
+	},
+	"delete-seeding": {
+		"body": {
+			"error": { "code": 409, "message": "seeding until it meets its ratio/time target" }
+		},
+		"status": 409
+	},
+	"magnet-downloaded": {
+		"body": {
+			"data": {
+				"added_at": "2026-11-18T09:30:00Z",
+				"files": [
+					{
+						"index": 0,
+						"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_0/big_buck_bunny_1080p.mkv?exp=placeholder&sig=placeholder",
+						"media_info": {
+							"duration_sec": 596.5,
+							"height": 1080,
+							"resolution": "1080p",
+							"video_codec": "h264",
+							"width": 1920
+						},
+						"name": "big_buck_bunny_1080p.mkv",
+						"path": "/big_buck_bunny_1080p.mkv",
+						"size": 276134947
+					},
+					{
+						"index": 1,
+						"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_1/poster.jpg?exp=placeholder&sig=placeholder",
+						"name": "poster.jpg",
+						"path": "/poster.jpg",
+						"size": 31233
+					}
+				],
+				"hash": "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c",
+				"id": "01936f0e-7a10-7c3e-9b1a-000000000001",
+				"magnet": "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny",
+				"name": "Big Buck Bunny",
+				"private": false,
+				"size": 276166180,
+				"status": "downloaded"
+			}
+		},
+		"status": 200
+	},
+	"magnets-list": {
+		"body": {
+			"data": {
+				"items": [
+					{
+						"added_at": "2026-11-20T18:04:40Z",
+						"files": [],
+						"hash": "c9e15763f722f23e98a29decdfae341b98d53056",
+						"id": "01936f0e-7a10-7c3e-9b1a-000000000004",
+						"magnet": "magnet:?xt=urn:btih:c9e15763f722f23e98a29decdfae341b98d53056&dn=Cosmos+Laundromat",
+						"name": "Cosmos Laundromat",
+						"private": false,
+						"size": 0,
+						"status": "failed"
+					},
+					{
+						"added_at": "2026-11-20T17:55:12Z",
+						"files": [],
+						"hash": "209c8226b299b308beaf2b9cd3fb49212dbd13ec",
+						"id": "01936f0e-7a10-7c3e-9b1a-000000000003",
+						"magnet": "magnet:?xt=urn:btih:209c8226b299b308beaf2b9cd3fb49212dbd13ec&dn=Tears+of+Steel",
+						"name": "Tears of Steel",
+						"private": false,
+						"size": 0,
+						"status": "queued"
+					},
+					{
+						"added_at": "2026-11-19T12:00:03Z",
+						"files": [],
+						"hash": "08ada5a7a6183aae1e09d831df6748d566095a10",
+						"id": "01936f0e-7a10-7c3e-9b1a-000000000002",
+						"magnet": "magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel",
+						"name": "Sintel",
+						"private": false,
+						"size": 0,
+						"status": "downloading"
+					},
+					{
+						"added_at": "2026-11-18T09:30:00Z",
+						"files": [
+							{
+								"index": 0,
+								"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_0/big_buck_bunny_1080p.mkv?exp=placeholder&sig=placeholder",
+								"name": "big_buck_bunny_1080p.mkv",
+								"path": "/big_buck_bunny_1080p.mkv",
+								"size": 276134947
+							}
+						],
+						"hash": "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c",
+						"id": "01936f0e-7a10-7c3e-9b1a-000000000001",
+						"magnet": "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny",
+						"name": "Big Buck Bunny",
+						"private": false,
+						"size": 276134947,
+						"status": "downloaded"
+					}
+				],
+				"total_items": 4
+			}
+		},
+		"status": 200
+	},
+	"magnets-list-empty": {
+		"body": { "data": { "items": [], "total_items": 0 } },
+		"status": 200
+	},
+	"not-found": {
+		"body": { "error": { "code": 404, "message": "not found" } },
+		"status": 404
+	},
+	"plan-expired": {
+		"body": {
+			"error": { "code": 403, "message": "subscription expired, renew at https://torrin.app" }
+		},
+		"status": 403
+	},
+	"plan-paused": {
+		"body": {
+			"error": { "code": 403, "message": "subscription paused, resume at https://torrin.app" }
+		},
+		"status": 403
+	},
+	"rate-limited": {
+		"body": { "error": "rate limit exceeded" },
+		"status": 429
+	},
+	"user": {
+		"body": {
+			"data": {
+				"email": "someone@example.com",
+				"id": "01936f0e-0000-7000-8000-000000000042",
+				"subscription_status": "premium"
+			}
+		},
+		"status": 200
+	}
+}
