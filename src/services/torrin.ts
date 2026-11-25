@@ -87,13 +87,20 @@ export type TorrinMagnetStatus = (typeof TORRIN_MAGNET_STATUSES)[number];
  * Every answer the cache check gives per hash:
  *
  *  - `cached`: Torrin holds the files now; an add is instant and the check
- *    already lists them, links included.
- *  - `acceleratable`: Torrin does not hold them, but it knows a fast way to get
- *    them: a release link it has on record, its shared AllDebrid pool, a live
- *    TorrentClaw check, or the account's own Real-Debrid, AllDebrid,
- *    Premiumize, TorBox or Offcloud key on a plan that allows that. An add is
- *    fast but not instant, and lists no files yet.
- *  - `unknown`: neither. An add downloads it the slow way, if the plan allows.
+ *    already lists them, links included. **The only answer to show as
+ *    available.**
+ *  - `acceleratable`: Torrin does not hold them, but one of its upstreams
+ *    claims it can supply them: a release link it has on record, its shared
+ *    AllDebrid pool, a live TorrentClaw check, or the account's own
+ *    Real-Debrid, AllDebrid, Premiumize, TorBox or Offcloud key on a plan that
+ *    allows that. It lists no files. Measured on 2026-11-25, one account got
+ *    this answer for every hash asked, random ones that name no torrent
+ *    included, so it is a claim and never evidence of availability.
+ *  - `unknown`: none of those answered.
+ *
+ * Unless another account is already downloading it, an add of anything not
+ * `cached` starts a new download, which counts against the plan's monthly and
+ * hourly limits.
  */
 export const TORRIN_CACHE_STATUSES = ['cached', 'acceleratable', 'unknown'] as const;
 
@@ -107,7 +114,10 @@ export interface TorrinMediaInfo {
 	duration_sec?: number;
 	bitrate?: number;
 	video_codec?: string;
+	/** `DV`, `HDR10` or `HLG`; absent for SDR. */
 	hdr?: string;
+	audio?: { codec?: string; channels?: number; language?: string; title?: string }[];
+	subtitles?: { language?: string; title?: string }[];
 }
 
 export interface TorrinFile {
@@ -423,12 +433,13 @@ export const getTorrinMagnet = async (apiKey: string, id: string): Promise<Torri
  * Adds one magnet or bare hash, after validating its info hash.
  *
  * Nothing needs checking first. Torrin dedupes per account and hash, answering
- * a second add with the download it already has. Something Torrin already holds
- * comes back `downloaded` with its files; something another account is still
- * downloading is joined and comes back `downloading`; anything else is
- * `queued`. Only an add that starts a new download counts against the plan's
- * monthly and hourly limits, and running into one, or into a full queue, is a
- * 429 whose message names it. A release that needs a paid plan is a 403.
+ * a second add with the download it already has (measured: the same id, by
+ * magnet and then by bare hash). Something Torrin already holds comes back
+ * `downloaded` with its files; something another account is still downloading
+ * is joined and comes back `downloading`; anything else is `queued`. Only an
+ * add that starts a new download counts against the plan's monthly and hourly
+ * limits, and running into one, or into a full queue, is a 429 whose message
+ * names it. A release that needs a paid plan is a 403.
  */
 export async function addTorrinMagnet(apiKey: string, magnetOrHash: string): Promise<TorrinMagnet> {
 	const source = magnetOrHash.trim();

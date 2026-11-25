@@ -121,9 +121,12 @@
 						"index": 0,
 						"link": "https://stream.example.test/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/file_0/big_buck_bunny_1080p.mkv?exp=placeholder&sig=placeholder",
 						"media_info": {
+							"audio": [{ "channels": 6, "codec": "ac3", "language": "eng" }],
+							"bitrate": 3703812,
 							"duration_sec": 596.5,
 							"height": 1080,
 							"resolution": "1080p",
+							"subtitles": [{ "language": "eng" }],
 							"video_codec": "h264",
 							"width": 1920
 						},

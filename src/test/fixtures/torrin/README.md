@@ -28,6 +28,23 @@ is replaced whole with `stream.example.test` and placeholder `exp`/`sig` paramet
 real ones are signed and work as a key to the file for 24 hours. The releases are Blender open
 movies with their well-known v1 info hashes. Names, sizes, dates and media info are illustrative.
 
+## Checked live
+
+On 2026-11-25 the live tests ran against torrin.app with a key that cannot log in, on an account
+holding eight finished downloads. Only the structure of each answer was compared with this file,
+keys and value types, without keeping any value:
+
+- `user`, `magnets` (the list), `magnets/{id}` for a finished download, `magnets/check` and a bad
+  key's 401 have exactly the keys and types above, `private` included.
+- Real `media_info` also carries `audio` (`codec`, `channels`, `language`) and `subtitles`
+  (`language`) lists, as `shared/mediainfo/mediainfo.go` declares; `magnet-downloaded` now has
+  them too.
+- `magnets/check` answered `acceleratable` for every hash asked: Big Buck Bunny, the all-zero hash
+  and three random ones that name no torrent. That answer is no evidence of availability.
+- Adding Big Buck Bunny, which the check called `acceleratable`, answered `queued` and read back as
+  `downloading` a moment later. Adding it again, by bare hash, answered the same id. The delete
+  answered 204 and the list no longer held it.
+
 ## Recorded
 
 None yet. Replace each entry with an answer captured from a real account when one exists

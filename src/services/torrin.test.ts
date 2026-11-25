@@ -395,7 +395,13 @@ describe('one download', () => {
 			'big_buck_bunny_1080p.mkv',
 			'poster.jpg',
 		]);
-		expect(magnet.files?.[0].media_info?.height).toBe(1080);
+		expect(magnet.files?.[0].media_info).toMatchObject({
+			height: 1080,
+			audio: [{ channels: 6, language: 'eng' }],
+			subtitles: [{ language: 'eng' }],
+		});
+		// SDR video carries no `hdr` at all; Torrin names only DV, HDR10 and HLG.
+		expect(magnet.files?.[0].media_info?.hdr).toBeUndefined();
 	});
 
 	it('escapes an id rather than letting it reach another route', async () => {

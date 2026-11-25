@@ -26,11 +26,14 @@ import {
  * Torrin instead of torrin.app.
  *
  * TORRIN_LIVE_MUTATE=1 also adds TORRIN_LIVE_HASH (Big Buck Bunny by default),
- * reads it back by id and removes it again. It does nothing when the account
- * already holds the hash, or when the cache check answers `unknown`: that add
- * would start a real download, which counts against the plan's monthly and
- * hourly limits. A removed download that finished stays in Torrin's shared
- * cache.
+ * adds it a second time to check the dedupe, reads it back by id and removes
+ * it again. It does nothing when the account already holds the hash, or when
+ * the cache check answers `unknown`. Unless the answer is `cached`, the add
+ * starts a real download, which uses one of the plan's hourly downloads and
+ * may count toward its monthly limit (about 276 MB for the default) even
+ * though the removal cancels it. `acceleratable` is no guarantee, since it has
+ * been seen for every hash asked. A removed download that finished stays in
+ * Torrin's shared cache.
  *
  *	TORRIN_LIVE_KEY=<key> npx vitest run --config vitest.live.config.ts src/services/torrin.live.test.ts
  *
