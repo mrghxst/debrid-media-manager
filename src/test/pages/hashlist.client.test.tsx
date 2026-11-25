@@ -147,7 +147,7 @@ describe('HashlistPage', () => {
 		render(<HashlistPage />);
 
 		expect(
-			screen.getByText('Login to RD/AD/TB/PM/OC/DL/put.io to download')
+			screen.getByText('Login to RD/AD/TB/PM/OC/DL/put.io/Torrin to download')
 		).toBeInTheDocument();
 	});
 
@@ -160,7 +160,7 @@ describe('HashlistPage', () => {
 
 		expect(screen.getByText('OC Download (0)')).toBeInTheDocument();
 		expect(
-			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io to download')
+			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io/Torrin to download')
 		).not.toBeInTheDocument();
 
 		vi.mocked(useOffcloudApiKey).mockReturnValue(null);
@@ -175,7 +175,7 @@ describe('HashlistPage', () => {
 
 		expect(screen.getByText('DL Download (0)')).toBeInTheDocument();
 		expect(
-			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io to download')
+			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io/Torrin to download')
 		).not.toBeInTheDocument();
 
 		vi.mocked(useDebridLinkCredential).mockReturnValue(null);
@@ -190,7 +190,7 @@ describe('HashlistPage', () => {
 
 		expect(screen.getByText('PT Download (0)')).toBeInTheDocument();
 		expect(
-			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io to download')
+			screen.queryByText('Login to RD/AD/TB/PM/OC/DL/put.io/Torrin to download')
 		).not.toBeInTheDocument();
 
 		vi.mocked(usePutioAccessToken).mockReturnValue(null);

@@ -8,6 +8,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { deleteMagnetAd, getMagnetStatus, uploadMagnet } from '@/services/allDebrid';
 import { EnrichedHashlistTorrent, Hashlist, HashlistTorrent } from '@/services/mediasearch';
@@ -27,8 +28,10 @@ import {
 	handleAddAsMagnetInPm,
 	handleAddAsMagnetInPt,
 	handleAddAsMagnetInRd,
+	handleAddAsMagnetInTr,
 	handleAddMultipleHashesInDl,
 	handleAddMultipleHashesInPt,
+	handleAddMultipleHashesInTr,
 } from '@/utils/addMagnet';
 import { runConcurrentFunctions } from '@/utils/batch';
 import {
@@ -39,6 +42,7 @@ import {
 	handleDeletePtTorrent,
 	handleDeleteRdTorrent,
 	handleDeleteTbTorrent,
+	handleDeleteTrTorrent,
 } from '@/utils/deleteTorrent';
 import {
 	convertToAllDebridUserTorrent,
@@ -55,6 +59,7 @@ import {
 import {
 	checkAvailabilityOc2,
 	checkAvailabilityPm2,
+	checkAvailabilityTr2,
 	checkDatabaseAvailabilityTb2,
 	checkPlayableAvailabilityAd,
 	checkPlayableAvailabilityDl,
@@ -138,6 +143,7 @@ function enrichHashlistTorrent(torrent: HashlistTorrent): EnrichedHashlistTorren
 		pmAvailable: false,
 		ocAvailable: false,
 		dlAvailable: false,
+		trAvailable: false,
 		noVideos: false,
 		files: [],
 		...torrent,
@@ -205,8 +211,9 @@ function HashlistPage() {
 	// Not in anyDebridKey: put.io has no cache check, so a cached-only filter
 	// would hide every row from a put.io-only user.
 	const ptKey = usePutioAccessToken();
+	const trKey = useTorrinApiKey();
 	// The cached-only filter and its Show All toggle go together, for every provider.
-	const anyDebridKey = !!(rdKey || adKey || tbKey || pmKey || ocKey || dlKey);
+	const anyDebridKey = !!(rdKey || adKey || tbKey || pmKey || ocKey || dlKey || trKey);
 	const {
 		addTorrent: addToCache,
 		removeTorrent: removeFromCache,
@@ -414,7 +421,9 @@ function HashlistPage() {
 				setUserTorrentsList
 			);
 		});
-	}, [listHashes, rdKey, adKey, tbKey, pmKey, ocKey, dlKey]);
+		// Torrin's cache check is read-only, so it is probed like Premiumize's.
+		start('TR', trKey, () => checkAvailabilityTr2(trKey!, listHashes, setUserTorrentsList));
+	}, [listHashes, rdKey, adKey, tbKey, pmKey, ocKey, dlKey, trKey]);
 
 	const [hashAndProgress, setHashAndProgress] = useState<Record<string, number>>({});
 	async function fetchHashAndProgress(hash?: string) {
@@ -479,7 +488,8 @@ function HashlistPage() {
 					t.tbAvailable ||
 					t.pmAvailable ||
 					t.ocAvailable ||
-					t.dlAvailable
+					t.dlAvailable ||
+					t.trAvailable
 			);
 		}
 
@@ -1060,6 +1070,54 @@ function HashlistPage() {
 		});
 	}
 
+	async function addTr(hash: string) {
+		try {
+			await handleAddAsMagnetInTr(trKey!, hash, async (userTorrent) => {
+				await torrentDB.addAll([userTorrent]);
+				addToCache(userTorrent);
+				await fetchHashAndProgress(hash);
+			});
+		} catch {
+			// handleAddAsMagnetInTr reports its own failure
+		}
+	}
+
+	async function deleteTr(hash: string) {
+		const torrents = await torrentDB.getAllByHash(hash);
+		for (const t of torrents) {
+			if (!t.id.startsWith('tr:')) continue;
+			if (!(await handleDeleteTrTorrent(trKey!, t.id))) continue;
+			await torrentDB.deleteById(t.id);
+			removeFromCache(t.id);
+			setHashAndProgress((prev) => {
+				const newHashAndProgress = { ...prev };
+				delete newHashAndProgress[`tr:${hash}`];
+				return newHashAndProgress;
+			});
+		}
+	}
+
+	/**
+	 * Sends the shown list to Torrin, one add each, like put.io's sweep. Torrin
+	 * dedupes per account and hash; the sweep stops at the first refusal of the
+	 * account and counts refusals of single releases.
+	 */
+	async function downloadNonDupeTorrentsInTr() {
+		const libraryHashes = await torrentDB.hashes();
+		const yetToDownload = filteredList
+			.filter((t) => !libraryHashes.has(t.hash))
+			.map((t) => t.hash);
+		if (yetToDownload.length === 0) {
+			toast('Everything already downloaded', genericToastOptions);
+			return;
+		}
+		if (!(await confirmBulkAdd(yetToDownload.length, 'Torrin'))) return;
+
+		await handleAddMultipleHashesInTr(trKey!, yetToDownload, async () => {
+			await fetchHashAndProgress();
+		});
+	}
+
 	async function addOc(hash: string) {
 		try {
 			await handleAddAsMagnetInOc(ocKey!, hash, async (userTorrent) => {
@@ -1434,6 +1492,18 @@ function HashlistPage() {
 					</button>
 				)}
 
+				{mounted && trKey && (
+					<button
+						className={`mr-2 mb-2 rounded border-2 border-[#c8956c] bg-[#c8956c]/30 px-2 py-1 text-orange-100 transition-colors hover:bg-[#c8956c]/50 ${
+							filteredList.length === 0 ? 'cursor-not-allowed opacity-60' : ''
+						}`}
+						onClick={downloadNonDupeTorrentsInTr}
+						disabled={filteredList.length === 0}
+					>
+						TR Download ({filteredList.length})
+					</button>
+				)}
+
 				{Object.keys(router.query).length !== 0 && (
 					<Link
 						href="/hashlist"
@@ -1443,15 +1513,23 @@ function HashlistPage() {
 					</Link>
 				)}
 
-				{mounted && !rdKey && !adKey && !tbKey && !pmKey && !ocKey && !dlKey && !ptKey && (
-					<>
-						<span className="mr-2 mb-2 rounded px-2 py-1 text-white">
-							Login to RD/AD/TB/PM/OC/DL/put.io to download
-						</span>
-					</>
-				)}
+				{mounted &&
+					!rdKey &&
+					!adKey &&
+					!tbKey &&
+					!pmKey &&
+					!ocKey &&
+					!dlKey &&
+					!ptKey &&
+					!trKey && (
+						<>
+							<span className="mr-2 mb-2 rounded px-2 py-1 text-white">
+								Login to RD/AD/TB/PM/OC/DL/put.io/Torrin to download
+							</span>
+						</>
+					)}
 
-				{mounted && (rdKey || adKey || tbKey || pmKey || ocKey || dlKey) && (
+				{mounted && (rdKey || adKey || tbKey || pmKey || ocKey || dlKey || trKey) && (
 					<span className="text-s mr-2 bg-green-100 px-2.5 py-1 text-green-800">
 						<strong>{userTorrentsList.length - filteredList.length}</strong> hidden
 					</span>
@@ -1751,6 +1829,28 @@ function HashlistPage() {
 											>
 												<Download className="mr-1 inline h-3 w-3" />
 												PT
+											</button>
+										)}
+										{mounted && trKey && isDownloading('tr', t.hash) && (
+											<button
+												className="ml-2 rounded border-2 border-red-500 bg-red-900/30 px-2 py-1 text-red-100 transition-colors hover:bg-red-800/50"
+												onClick={() => deleteTr(t.hash)}
+											>
+												<X className="mr-1 inline h-3 w-3" />
+												TR ({hashAndProgress[`tr:${t.hash}`] || 0}%)
+											</button>
+										)}
+										{mounted && trKey && notInLibrary('tr', t.hash) && (
+											<button
+												className={`ml-2 rounded border-2 px-2 py-1 transition-colors ${
+													t.trAvailable
+														? 'border-green-500 bg-green-900/30 text-green-100 hover:bg-green-800/50'
+														: 'border-[#c8956c] bg-[#c8956c]/30 text-orange-100 hover:bg-[#c8956c]/50'
+												}`}
+												onClick={() => addTr(t.hash)}
+											>
+												<Download className="mr-1 inline h-3 w-3" />
+												TR
 											</button>
 										)}
 									</td>
