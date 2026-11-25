@@ -98,6 +98,7 @@ import {
 import { isVideo } from './selectable';
 import { magnetToastOptions } from './toastOptions';
 import { isWebDownloadRowId, parseTorBoxRowId } from './torboxWebDownload';
+import { getHashOfTorrent, torrentNameOf } from './torrentFile';
 
 // Extract error message from API response based on service type
 // RD: { error: "message" } or { error: "code", error_code: 34|35 }
@@ -1869,4 +1870,36 @@ export const handleAddMultipleHashesInTr = async (
 	if (refused > 0) parts.push(`${refused} refused`);
 	toast(`${parts.join(' — ')}.`, magnetToastOptions);
 	if (stoppedBy) toast.error(`${stoppedBy} Stopped early.`, magnetToastOptions);
+};
+
+/**
+ * `.torrent` uploads. Torrin's store API takes magnets only, so each file goes
+ * in as a magnet of its info hash and name, and Torrin reads the rest from the
+ * swarm. Trackers are not carried over: a private torrent that only its own
+ * tracker serves may never start.
+ */
+export const handleAddMultipleTorrentFilesInTr = async (
+	trKey: string,
+	files: File[],
+	callback?: () => Promise<void>
+) => {
+	const magnets: string[] = [];
+	let unreadable = 0;
+	for (const file of files) {
+		const hash = await getHashOfTorrent(file);
+		if (!hash) {
+			unreadable++;
+			continue;
+		}
+		const name = torrentNameOf(await file.arrayBuffer());
+		magnets.push(`magnet:?xt=urn:btih:${hash}${name ? `&dn=${encodeURIComponent(name)}` : ''}`);
+	}
+	if (unreadable > 0) {
+		toast.error(
+			`${unreadable} .torrent file${unreadable === 1 ? '' : 's'} could not be read.`,
+			magnetToastOptions
+		);
+	}
+	if (magnets.length > 0) await handleAddMultipleHashesInTr(trKey, magnets, callback);
+	else if (callback) await callback();
 };

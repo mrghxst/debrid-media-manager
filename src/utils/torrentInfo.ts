@@ -6,6 +6,7 @@ import {
 	showInfoForPT,
 	showInfoForRD,
 	showInfoForTB,
+	showInfoForTR,
 } from '@/components/showInfo/index';
 import { getMagnetLinks, isAdStatusReady } from '@/services/allDebrid';
 import { getTorrentInfo } from '@/services/realDebrid';
@@ -373,4 +374,26 @@ export async function handleShowInfoForPT(
 	};
 
 	await showInfoForPT(ptKey, t, shouldDownloadMagnets, { onDeletePt, poster });
+}
+
+export async function handleShowInfoForTR(
+	t: UserTorrent,
+	trKey: string,
+	setUserTorrentsList: (fn: (prev: UserTorrent[]) => UserTorrent[]) => void,
+	setSelectedTorrents: Dispatch<SetStateAction<Set<string>>>,
+	shouldDownloadMagnets?: boolean,
+	poster?: DialogPoster
+) {
+	const onDeleteTr = async (key: string, id: string) => {
+		const { handleDeleteTrTorrent } = await import('./deleteTorrent');
+		if (!(await handleDeleteTrTorrent(key, id))) return;
+		setUserTorrentsList((prev) => prev.filter((torrent) => torrent.id !== id));
+		setSelectedTorrents((prev) => {
+			prev.delete(id);
+			return new Set(prev);
+		});
+		Modal.close();
+	};
+
+	await showInfoForTR(trKey, t, shouldDownloadMagnets, { onDeleteTr, poster });
 }

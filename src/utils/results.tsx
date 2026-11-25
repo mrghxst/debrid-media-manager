@@ -41,6 +41,8 @@ export const torrentPrefix = (id: string) =>
 		<span className="bg-[#f97316] text-xs text-black">OC</span>
 	) : id.startsWith('dl:') ? (
 		<span className="bg-[#38bdf8] text-xs text-black">DL</span>
+	) : id.startsWith('tr:') ? (
+		<span className="bg-[#c8956c] text-xs text-black">TR</span>
 	) : (
 		<span className="bg-[#fbc730] text-[8px] text-black">AD</span>
 	);

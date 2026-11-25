@@ -119,6 +119,7 @@ export const filterLibraryItems = ({
 			oc: 'Offcloud',
 			dl: 'Debrid-Link',
 			pt: 'put.io',
+			tr: 'Torrin',
 		};
 		nextHelpText = `Showing torrents from ${serviceNames[serviceValue] ?? serviceValue}`;
 	}

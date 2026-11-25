@@ -17,6 +17,7 @@ import {
 	handleDeletePtTorrent,
 	handleDeleteRdTorrent,
 	handleDeleteTbTorrent,
+	handleDeleteTrTorrent,
 } from '@/utils/deleteTorrent';
 import { handleShare } from '@/utils/hashList';
 import { providerHashKey, type LibraryGrouping } from '@/utils/libraryGrouping';
@@ -76,6 +77,7 @@ interface TorrentRowProps {
 	ocKey: string | null;
 	dlKey: string | null;
 	ptKey?: string | null;
+	trKey?: string | null;
 	shouldDownloadMagnets: boolean;
 	grouping: LibraryGrouping;
 	hashFilter?: string;
@@ -100,6 +102,7 @@ function TorrentRow({
 	ocKey,
 	dlKey,
 	ptKey = null,
+	trKey = null,
 	shouldDownloadMagnets,
 	grouping,
 	hashFilter,
@@ -454,7 +457,7 @@ function TorrentRow({
 		: torrent.title;
 	const filenameIsTitle = normalizeName(torrent.filename) === normalizeName(displayTitle);
 	const multipleServices =
-		[rdKey, adKey, tbKey, pmKey, ocKey, dlKey, ptKey].filter(Boolean).length > 1;
+		[rdKey, adKey, tbKey, pmKey, ocKey, dlKey, ptKey, trKey].filter(Boolean).length > 1;
 
 	// The provider's own word for "done" is on nearly every row and says nothing;
 	// anything else (expired, stalled, an error, a transfer under way) is shown.
@@ -782,6 +785,9 @@ function TorrentRow({
 							}
 							if (ptKey && torrent.id.startsWith('pt:')) {
 								success = await handleDeletePtTorrent(ptKey, torrent.id);
+							}
+							if (trKey && torrent.id.startsWith('tr:')) {
+								success = await handleDeleteTrTorrent(trKey, torrent.id);
 							}
 							if (success) onDelete(torrent.id);
 						}}

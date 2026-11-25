@@ -7,6 +7,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { useRelativeTimeLabel } from '@/hooks/useRelativeTimeLabel';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function FloatingLibraryIndicator() {
 	const ocKey = useOffcloudApiKey();
 	const dlKey = useDebridLinkCredential();
 	const ptKey = usePutioAccessToken();
+	const trKey = useTorrinApiKey();
 	const [mounted, setMounted] = useState(false);
 	const lastFetchLabel = useRelativeTimeLabel(lastFetchTime, 'Just now');
 
@@ -45,7 +47,8 @@ export default function FloatingLibraryIndicator() {
 		!!pmKey?.trim() ||
 		!!ocKey?.trim() ||
 		!!dlKey?.trim() ||
-		!!ptKey?.trim();
+		!!ptKey?.trim() ||
+		!!trKey?.trim();
 
 	const handleRefresh = async () => {
 		try {

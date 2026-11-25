@@ -21,6 +21,7 @@ interface LibraryActionButtonsProps {
 	ocKey?: string | null;
 	dlKey?: string | null;
 	ptKey?: string | null;
+	trKey?: string | null;
 	showDedupe: boolean;
 	showHashCombine: boolean;
 }
@@ -45,6 +46,7 @@ export default function LibraryActionButtons({
 	ocKey,
 	dlKey,
 	ptKey,
+	trKey,
 	showDedupe,
 	showHashCombine,
 }: LibraryActionButtonsProps) {
@@ -159,6 +161,15 @@ export default function LibraryActionButtons({
 				<LibraryButton variant="teal" onClick={() => onAddMagnet('pt')}>
 					<Link2 className="mr-1 inline-block h-4 w-4 text-teal-500" />
 					PT&nbsp;Add
+				</LibraryButton>
+			)}
+
+			{/* No restore for Torrin either: re-adding a backup starts a download for every
+			    row Torrin does not hold, each counted against the plan's limits. */}
+			{trKey && (
+				<LibraryButton variant="amber" onClick={() => onAddMagnet('tr')}>
+					<Link2 className="mr-1 inline-block h-4 w-4 text-amber-500" />
+					TR&nbsp;Add
 				</LibraryButton>
 			)}
 

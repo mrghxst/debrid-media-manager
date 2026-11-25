@@ -5,7 +5,7 @@ import { getLocalStorageItem } from '@/utils/browserStorage';
  * Where a magnet sent to /library?addMagnet= goes: the browser extension's DMM
  * button and the registered magnet handler both open that URL.
  */
-export type MagnetProvider = 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl' | 'pt';
+export type MagnetProvider = 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl' | 'pt' | 'tr';
 export type MagnetChoice = MagnetProvider | 'all';
 
 /** A `settings:` key, so the choice rides along with "remember across devices". */
@@ -19,6 +19,7 @@ const NAMES: Record<MagnetProvider, string> = {
 	oc: 'Offcloud',
 	dl: 'Debrid-Link',
 	pt: 'put.io',
+	tr: 'Torrin',
 };
 
 /**

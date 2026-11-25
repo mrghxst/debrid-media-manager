@@ -56,10 +56,14 @@ vi.mock('@/utils/fetchTorrents', () => ({
 	),
 	withOriginalRdNames: vi.fn(async (_key: string, rows: any[]) => rows),
 	convertToPutioUserTorrent: vi.fn((data: any) => ({ id: `pt:${data.id}` }) as any),
+	convertToTorrinUserTorrent: vi.fn((data: any) => ({ id: `tr:${data.id}` }) as any),
 }));
 
 const mockListPutioTransfers = vi.hoisted(() => vi.fn());
 vi.mock('@/services/putio', () => ({ listPutioTransfers: mockListPutioTransfers }));
+
+const mockListTorrinMagnets = vi.hoisted(() => vi.fn());
+vi.mock('@/services/torrin', () => ({ listTorrinMagnets: mockListTorrinMagnets }));
 
 const mockGetUserTorrentsList = vi.mocked(getUserTorrentsList);
 const mockGetMagnetStatus = vi.mocked(getMagnetStatus);
@@ -117,6 +121,32 @@ describe('UnifiedLibraryFetcher', () => {
 			mockListPutioTransfers.mockRejectedValueOnce(new Error('put.io had a server error'));
 
 			await expect(fetcher.fetchLibrary('putio', 'pt-token')).rejects.toThrow('server error');
+		});
+	});
+
+	describe('Torrin', () => {
+		it('lists every download in one call and never caches under the key', async () => {
+			const { fetcher, cache, limiter } = createFetcher();
+			mockListTorrinMagnets.mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+
+			const result = await fetcher.fetchLibrary('torrin', 'tr_key', { maxItems: 2 });
+
+			expect(mockListTorrinMagnets).toHaveBeenCalledWith('tr_key');
+			expect(result).toEqual([{ id: 'tr:a' }, { id: 'tr:b' }]);
+			// The client stands down on the request limiter by itself.
+			expect(limiter.execute).not.toHaveBeenCalled();
+			// CacheManager logs its keys, and a key would carry the API key.
+			expect(cache.get).not.toHaveBeenCalled();
+			expect(cache.set).not.toHaveBeenCalled();
+		});
+
+		it('throws on a failed listing instead of returning an empty library', async () => {
+			const { fetcher } = createFetcher();
+			mockListTorrinMagnets.mockRejectedValueOnce(
+				new Error('Torrin answered without a download list.')
+			);
+
+			await expect(fetcher.fetchLibrary('torrin', 'tr_key')).rejects.toThrow('download list');
 		});
 	});
 

@@ -12,6 +12,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { useRelativeTimeLabel } from '@/hooks/useRelativeTimeLabel';
 import { getMagnetStatus, uploadMagnet } from '@/services/allDebrid';
@@ -28,6 +29,7 @@ import {
 	handleAddAsMagnetInPt,
 	handleAddAsMagnetInRd,
 	handleAddAsMagnetInTb,
+	handleAddAsMagnetInTr,
 	handleAddMultipleHashesInAd,
 	handleAddMultipleHashesInDl,
 	handleAddMultipleHashesInOc,
@@ -35,6 +37,7 @@ import {
 	handleAddMultipleHashesInPt,
 	handleAddMultipleHashesInRd,
 	handleAddMultipleHashesInTb,
+	handleAddMultipleHashesInTr,
 	handleAddMultipleMagnetsInDl,
 	handleAddMultipleTorrentFilesInAd,
 	handleAddMultipleTorrentFilesInDl,
@@ -43,6 +46,7 @@ import {
 	handleAddMultipleTorrentFilesInPt,
 	handleAddMultipleTorrentFilesInRd,
 	handleAddMultipleTorrentFilesInTb,
+	handleAddMultipleTorrentFilesInTr,
 	handleAddMultipleWebDownloadsInTb,
 	handleReinsertTorrentinRd,
 	handleRestartTbTorrent,
@@ -61,6 +65,7 @@ import {
 	handleDeletePtTorrent,
 	handleDeleteRdTorrent,
 	handleDeleteTbTorrent,
+	handleDeleteTrTorrent,
 } from '@/utils/deleteTorrent';
 import type { TorrentInput } from '@/utils/extractHashes';
 import { extractDownloadLinks, extractTorrentInputs } from '@/utils/extractHashes';
@@ -94,6 +99,7 @@ import {
 	handleShowInfoForPT,
 	handleShowInfoForRD,
 	handleShowInfoForTB,
+	handleShowInfoForTR,
 } from '@/utils/torrentInfo';
 import { withAuth } from '@/utils/withAuth';
 import { saveAs } from 'file-saver';
@@ -115,6 +121,7 @@ const torrentAdders = {
 	oc: { files: handleAddMultipleTorrentFilesInOc, sources: handleAddMultipleHashesInOc },
 	dl: { files: handleAddMultipleTorrentFilesInDl, sources: handleAddMultipleHashesInDl },
 	pt: { files: handleAddMultipleTorrentFilesInPt, sources: handleAddMultipleHashesInPt },
+	tr: { files: handleAddMultipleTorrentFilesInTr, sources: handleAddMultipleHashesInTr },
 };
 
 const TIPS = [
@@ -217,6 +224,7 @@ function TorrentsPage() {
 	const pmKey = usePremiumizeCredential();
 	const ocKey = useOffcloudApiKey();
 	const ptKey = usePutioAccessToken();
+	const trKey = useTorrinApiKey();
 
 	const grouping = useMemo(
 		() => buildLibraryGrouping(userTorrentsList, identifications),
@@ -344,6 +352,7 @@ function TorrentsPage() {
 				['oc', ocKey],
 				['dl', dlKey],
 				['pt', ptKey],
+				['tr', trKey],
 			] as const
 		)
 			.filter(([, key]) => key)
@@ -480,6 +489,20 @@ function TorrentsPage() {
 						});
 					} catch {
 						// handleAddAsMagnetInPt reports its own failure
+					}
+				})()
+			);
+		}
+
+		if (trKey && targets.has('tr')) {
+			promises.push(
+				(async () => {
+					try {
+						await handleAddAsMagnetInTr(trKey, source, async (userTorrent) => {
+							addTorrent(userTorrent);
+						});
+					} catch {
+						// handleAddAsMagnetInTr reports its own failure
 					}
 				})()
 			);
@@ -838,11 +861,14 @@ function TorrentsPage() {
 				if (ptKey && t.id.startsWith('pt:')) {
 					success = await handleDeletePtTorrent(ptKey, t.id);
 				}
+				if (trKey && t.id.startsWith('tr:')) {
+					success = await handleDeleteTrTorrent(trKey, t.id);
+				}
 				if (!success) throw new Error(`Failed to delete ${t.id}`);
 				return t.id;
 			};
 		},
-		[rdKey, adKey, tbKey, pmKey, ocKey, dlKey, ptKey]
+		[rdKey, adKey, tbKey, pmKey, ocKey, dlKey, ptKey, trKey]
 	);
 
 	const wrapReinsertFn = useCallback(
@@ -1790,9 +1816,16 @@ function TorrentsPage() {
 
 		if (!Object.hasOwn(torrentAdders, debridService)) return;
 		const service = debridService as keyof typeof torrentAdders;
-		const key = { rd: rdKey, ad: adKey, tb: tbKey, pm: pmKey, oc: ocKey, dl: dlKey, pt: ptKey }[
-			service
-		];
+		const key = {
+			rd: rdKey,
+			ad: adKey,
+			tb: tbKey,
+			pm: pmKey,
+			oc: ocKey,
+			dl: dlKey,
+			pt: ptKey,
+			tr: trKey,
+		}[service];
 		if (!key) return;
 		const adders = torrentAdders[service];
 		const refresh = async () => {
@@ -1941,6 +1974,7 @@ function TorrentsPage() {
 						hasOc={!!ocKey}
 						hasDl={!!dlKey}
 						hasPt={!!ptKey}
+						hasTr={!!trKey}
 					/>
 					<LibraryActionButtons
 						onSelectShown={() => selectShown(currentPageData, setSelectedTorrents)}
@@ -1962,6 +1996,7 @@ function TorrentsPage() {
 						ocKey={ocKey}
 						dlKey={dlKey}
 						ptKey={ptKey}
+						trKey={trKey}
 						showDedupe={
 							router.query.status === 'sametitle' ||
 							(!!titleFilter && filteredList.length > 1)
@@ -2013,6 +2048,7 @@ function TorrentsPage() {
 												ocKey={ocKey}
 												dlKey={dlKey}
 												ptKey={ptKey}
+												trKey={trKey}
 												shouldDownloadMagnets={shouldDownloadMagnets}
 												grouping={grouping}
 												hashFilter={hashFilter as string}
@@ -2125,6 +2161,15 @@ function TorrentsPage() {
 														await handleShowInfoForPT(
 															t,
 															ptKey,
+															setUserTorrentsList,
+															setSelectedTorrents,
+															shouldDownloadMagnets,
+															poster
+														);
+													} else if (t.id.startsWith('tr:') && trKey) {
+														await handleShowInfoForTR(
+															t,
+															trKey,
 															setUserTorrentsList,
 															setSelectedTorrents,
 															shouldDownloadMagnets,

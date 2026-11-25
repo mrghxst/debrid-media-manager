@@ -18,6 +18,7 @@ import {
 } from '@/services/putio';
 import { addHashAsMagnet, proxyUnrestrictLink, selectFiles } from '@/services/realDebrid';
 import { requestDownloadLink, requestWebDownloadLink } from '@/services/torbox';
+import { TorrinError, getTorrinMagnet, torrinMagnetStatus } from '@/services/torrin';
 import { TorBoxTorrentInfo } from '@/services/types';
 import { handleRestartTorrent, interactiveRdPauseRetries } from '@/utils/addMagnet';
 import { isAdMagnetFailed } from '@/utils/canReinsert';
@@ -31,6 +32,7 @@ import {
 	handleDeletePtTorrent,
 	handleDeleteRdTorrent,
 	handleDeleteTbTorrent,
+	handleDeleteTrTorrent,
 } from '@/utils/deleteTorrent';
 import { escapeHtml } from '@/utils/escapeHtml';
 import { parseOffcloudRowId } from '@/utils/offcloudRow';
@@ -41,6 +43,11 @@ import { retryRdAddThroughPause } from '@/utils/rdAddPause';
 import { getRdExportLinks } from '@/utils/rdExportLinks';
 import { magnetToastOptions } from '@/utils/toastOptions';
 import { toWebDownloadRowId } from '@/utils/torboxWebDownload';
+import {
+	getTorrinStatusText,
+	getTorrinUserTorrentStatus,
+	parseTorrinRowId,
+} from '@/utils/torrinRow';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { handleShare } from '../../utils/hashList';
@@ -2037,6 +2044,173 @@ export const showInfoForPT = async (
 					`${failed ? `Exported ${lines.length} links; ${failed} failed.` : 'Download links exported.'} ${PT_LINKS_ARE_KEYS}`,
 					{ ...magnetToastOptions, id: toastId, duration: 10_000 }
 				);
+			});
+		},
+	});
+};
+
+const TR_LINKS_ARE_KEYS =
+	'These links play your Torrin files for a day from anywhere: do not share them.';
+
+/**
+ * Info modal for a Torrin library row, which is one download.
+ *
+ * The download is read fresh on open: its files come with signed stream links
+ * good for a day, which stay in this modal and are never stored or logged. A
+ * file's button opens its link, and Torrin streams it to the browser or the
+ * player it is handed to. No Watch or Cast: both resolve on DMM's server,
+ * which would need the Torrin key there.
+ */
+export const showInfoForTR = async (
+	trKey: string,
+	torrent: {
+		id: string;
+		hash: string;
+		filename: string;
+		title: string;
+		bytes: number;
+		serviceStatus: string;
+		progress: number;
+		added: Date;
+	},
+	shouldDownloadMagnets?: boolean,
+	handlers: {
+		onDeleteTr?: (trKey: string, id: string) => Promise<void>;
+		poster?: DialogPoster;
+	} = {}
+): Promise<void> => {
+	const downloadId = parseTorrinRowId(torrent.id);
+	if (!downloadId) {
+		toast.error(`Unrecognised Torrin row ${torrent.id}.`, magnetToastOptions);
+		return;
+	}
+
+	Modal.showLoading();
+
+	let serviceStatus = torrent.serviceStatus;
+	let progress = torrent.progress;
+	const links = new Map<string, string>();
+	let rows: PremiumizeFileRow[] = [];
+	let listError: string | null = null;
+	try {
+		const fresh = await getTorrinMagnet(trKey, downloadId);
+		const status = torrinMagnetStatus(fresh);
+		serviceStatus = getTorrinStatusText(status);
+		progress = getTorrinUserTorrentStatus(status)[1];
+		rows = (fresh.files ?? []).map((file) => {
+			if (file.link) links.set(String(file.index), file.link);
+			return {
+				fileId: String(file.index),
+				filename: file.name,
+				filesize: typeof file.size === 'number' ? file.size : 0,
+			};
+		});
+	} catch (error) {
+		listError = error instanceof TorrinError ? error.message : 'Could not list the files.';
+		console.error(
+			'[torrentModal] listing failed (TR)',
+			error instanceof TorrinError ? error.code : 'unknown'
+		);
+	}
+
+	const totalBytes = rows.reduce((sum, row) => sum + row.filesize, 0) || torrent.bytes;
+
+	const libraryActions = `
+        <div class="mb-3 flex justify-center items-center flex-wrap">
+            ${renderButton('share', { link: `${await handleShare({ ...torrent, bytes: totalBytes })}` })}
+            ${renderButton('delete', { id: 'btn-delete-tr' })}
+            ${renderButton('magnet', { id: 'btn-magnet-copy-tr', text: shouldDownloadMagnets ? 'Download' : 'Copy' })}
+            ${links.size ? renderButton('exportLinks', { id: 'btn-export-links-tr' }) : ''}
+        </div>`;
+
+	const infoRows = [
+		{ label: 'Size', value: (totalBytes / 1024 ** 3).toFixed(2) + ' GB' },
+		{ label: 'ID', value: torrent.id },
+		{ label: 'Status', value: serviceStatus },
+		...(progress > 0 && progress < 100 ? [{ label: 'Progress', value: progress + '%' }] : []),
+		{
+			label: 'Added',
+			value: `${new Date(torrent.added).toLocaleString(undefined, { timeZone: 'UTC' })} UTC`,
+		},
+	];
+
+	const notice = listError
+		? `<div class="mb-2 rounded border border-red-600 bg-red-900/30 p-2 text-sm text-red-100">${escapeHtml(listError)}</div>`
+		: progress < 100
+			? `<div class="mb-2 rounded border border-amber-600 bg-amber-900/30 p-2 text-sm text-amber-100">
+            Torrin lists the files once the download is finished.
+        </div>`
+			: '';
+
+	const html = `<h1 class="text-lg font-bold mt-3 mb-2 text-gray-100">${escapeHtml(torrent.filename)}</h1>
+    ${libraryActions}
+    ${notice}
+    <div class="text-sm text-gray-200">
+        ${renderInfoTable(infoRows)}
+    </div>
+    <div class="text-sm max-h-60 mb-2 text-left p-1 bg-gray-900">
+        <div class="overflow-x-auto" style="max-width: 100%;">
+            <table class="table-auto">
+                <tbody>
+                    ${renderTorrentInfoPM(rows, { canWatch: false })}
+                </tbody>
+            </table>
+        </div>
+    </div>`;
+
+	await Modal.fire({
+		html,
+		poster: handlers.poster,
+		showConfirmButton: false,
+		showCancelButton: false,
+		customClass: {
+			htmlContainer: '!mx-1',
+			popup: '!bg-gray-900 !text-gray-100 !px-4 !py-3',
+			confirmButton: 'haptic',
+			cancelButton: 'haptic',
+		},
+		width: '800px',
+		showCloseButton: true,
+		inputAutoFocus: true,
+		didOpen: () => {
+			document
+				.querySelectorAll<HTMLButtonElement>('button[data-pm-file-id]')
+				.forEach((button) => {
+					button.addEventListener('click', () => {
+						const link = links.get(button.dataset.pmFileId ?? '');
+						if (link) window.open(link, '_blank', 'noopener');
+						else
+							toast.error(
+								'Torrin has no link for this file yet.',
+								magnetToastOptions
+							);
+					});
+				});
+
+			document.getElementById('btn-magnet-copy-tr')?.addEventListener('click', () => {
+				void handleCopyOrDownloadMagnet(torrent.hash, shouldDownloadMagnets);
+			});
+
+			document.getElementById('btn-delete-tr')?.addEventListener('click', async () => {
+				try {
+					if (handlers.onDeleteTr) await handlers.onDeleteTr(trKey, torrent.id);
+					else if (await handleDeleteTrTorrent(trKey, torrent.id)) Modal.close();
+				} catch {
+					// handleDeleteTrTorrent reports its own failure
+				}
+			});
+
+			document.getElementById('btn-export-links-tr')?.addEventListener('click', () => {
+				const blob = new Blob([[...links.values()].join('\n')], { type: 'text/plain' });
+				const a = document.createElement('a');
+				a.href = URL.createObjectURL(blob);
+				a.download = `${torrent.filename}.txt`;
+				a.click();
+				URL.revokeObjectURL(a.href);
+				toast.success(`Download links exported. ${TR_LINKS_ARE_KEYS}`, {
+					...magnetToastOptions,
+					duration: 10_000,
+				});
 			});
 		},
 	});

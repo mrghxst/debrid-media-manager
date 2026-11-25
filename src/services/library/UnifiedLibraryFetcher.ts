@@ -7,12 +7,14 @@ import { MagnetStatus, getMagnetStatus } from '@/services/allDebrid';
 import { listPutioTransfers } from '@/services/putio';
 import { getUserTorrentsList } from '@/services/realDebrid';
 import { getTorrentList, getWebDownloadList } from '@/services/torbox';
+import { listTorrinMagnets } from '@/services/torrin';
 import { UserTorrent } from '@/torrent/userTorrent';
 import {
 	convertToAllDebridUserTorrent,
 	convertToPutioUserTorrent,
 	convertToTbUserTorrent,
 	convertToTbWebDownloadUserTorrent,
+	convertToTorrinUserTorrent,
 	convertToUserTorrent,
 	fetchDebridLink,
 	fetchOffcloud,
@@ -27,7 +29,14 @@ import { UnifiedRateLimiter, getGlobalRateLimiter } from '../rateLimit/UnifiedRa
 export const TORBOX_PAGE_SIZE = 1000;
 
 export type LibraryService =
-	'realdebrid' | 'alldebrid' | 'torbox' | 'premiumize' | 'offcloud' | 'debridlink' | 'putio';
+	| 'realdebrid'
+	| 'alldebrid'
+	| 'torbox'
+	| 'premiumize'
+	| 'offcloud'
+	| 'debridlink'
+	| 'putio'
+	| 'torrin';
 
 export interface FetchOptions {
 	forceRefresh?: boolean;
@@ -108,6 +117,8 @@ export class UnifiedLibraryFetcher {
 				return this.fetchDebridLinkLibrary(token, options);
 			case 'putio':
 				return this.fetchPutioLibrary(token, options);
+			case 'torrin':
+				return this.fetchTorrinLibrary(token, options);
 			default:
 				throw new Error(`Unknown service: ${service}`);
 		}
@@ -166,6 +177,24 @@ export class UnifiedLibraryFetcher {
 		const transfers = await listPutioTransfers(token);
 		const limited = options.maxItems ? transfers.slice(0, options.maxItems) : transfers;
 		const torrents = limited.map((transfer) => convertToPutioUserTorrent(transfer));
+		options.onProgress?.(torrents.length, torrents.length);
+		options.onBatchComplete?.(torrents);
+		return torrents;
+	}
+
+	/**
+	 * Torrin: one call lists every download, newest first, with no paging for
+	 * clients and nothing to fan out to. The rows keep no files: each carries a
+	 * signed stream link, so the modal fetches them when it opens.
+	 *
+	 * Not cached here, like put.io: CacheManager logs its keys, and these would
+	 * carry the API key.
+	 */
+	private async fetchTorrinLibrary(token: string, options: FetchOptions): Promise<UserTorrent[]> {
+		// No limiter budget: the client stands down on the request limiter itself.
+		const magnets = await listTorrinMagnets(token);
+		const limited = options.maxItems ? magnets.slice(0, options.maxItems) : magnets;
+		const torrents = limited.map((magnet) => convertToTorrinUserTorrent(magnet));
 		options.onProgress?.(torrents.length, torrents.length);
 		options.onBatchComplete?.(torrents);
 		return torrents;
