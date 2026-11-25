@@ -14,6 +14,7 @@ import {
 	handleAddAsMagnetInPt,
 	handleAddAsMagnetInRd,
 	handleAddAsMagnetInTb,
+	handleAddAsMagnetInTr,
 	handleAddCachedInDl,
 } from '@/utils/addMagnet';
 import {
@@ -42,6 +43,7 @@ import {
 	handleDeletePtTorrent,
 	handleDeleteRdTorrent,
 	handleDeleteTbTorrent,
+	handleDeleteTrTorrent,
 } from '@/utils/deleteTorrent';
 import { shareDlAnswer } from '@/utils/dlAvailability';
 import { convertToUserTorrent } from '@/utils/fetchTorrents';
@@ -53,7 +55,7 @@ import toast from 'react-hot-toast';
 
 const torrentDB = new UserTorrentDB();
 
-const SERVICE_LABELS = { tb: 'TorBox', pm: 'Premiumize', oc: 'Offcloud' } as const;
+const SERVICE_LABELS = { tb: 'TorBox', pm: 'Premiumize', oc: 'Offcloud', tr: 'Torrin' } as const;
 
 /**
  * Extras for an `addRd` call that the page's own state cannot answer.
@@ -95,7 +97,7 @@ export type AddAdOptions = AddRdOptions & {
 };
 
 /** The services `addCached` can judge. Debrid-Link's is its bare-hash add, which takes only what it holds. */
-export type CachedAddService = 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl';
+export type CachedAddService = 'rd' | 'ad' | 'tb' | 'pm' | 'oc' | 'dl' | 'tr';
 
 export function useTorrentManagement(
 	rdKey: string | null,
@@ -107,7 +109,8 @@ export function useTorrentManagement(
 	imdbId: string,
 	searchResults: SearchResult[],
 	setSearchResults: React.Dispatch<React.SetStateAction<SearchResult[]>>,
-	putioKey: string | null = null
+	putioKey: string | null = null,
+	torrinKey: string | null = null
 ) {
 	const [hashAndProgress, setHashAndProgress] = useState<Record<string, number>>({});
 	const {
@@ -656,6 +659,32 @@ export function useTorrentManagement(
 		[putioKey, fetchHashAndProgress, addToCache]
 	);
 
+	/**
+	 * Adds a hash to Torrin. Something Torrin holds is ready at once; anything
+	 * else downloads and counts against the plan's limits. The handler has
+	 * already said why on failure.
+	 */
+	const addTr = useCallback(
+		async (hash: string) => {
+			if (!torrinKey) return;
+			try {
+				await handleAddAsMagnetInTr(torrinKey, hash, async (userTorrent: UserTorrent) => {
+					await torrentDB.add(userTorrent);
+					addToCache(userTorrent);
+					setHashAndProgress((prev) => ({
+						...prev,
+						[`${userTorrent.id.substring(0, 3)}${userTorrent.hash}`]:
+							userTorrent.progress,
+					}));
+					await fetchHashAndProgress();
+				});
+			} catch {
+				// handleAddAsMagnetInTr reports its own failure
+			}
+		},
+		[torrinKey, fetchHashAndProgress, addToCache]
+	);
+
 	// Sends a TorBox-cached search-result torrent into the user's RD account via
 	// the debrid uploader service, which rewrites the torrent with de-infringed
 	// filenames so RD accepts it — which is why this works even on RD-blocked
@@ -994,9 +1023,30 @@ export function useTorrentManagement(
 		[putioKey, removeFromCache]
 	);
 
+	/** Removes the Torrin rows for a hash; a row Torrin did not let go of stays. */
+	const deleteTr = useCallback(
+		async (hash: string) => {
+			if (!torrinKey) return;
+
+			const torrents = await torrentDB.getAllByHash(hash);
+			for (const t of torrents) {
+				if (!t.id.startsWith('tr:')) continue;
+				if (!(await handleDeleteTrTorrent(torrinKey, t.id))) continue;
+				await torrentDB.deleteById(t.id);
+				removeFromCache(t.id);
+				setHashAndProgress((prev) => {
+					const newHashAndProgress = { ...prev };
+					delete newHashAndProgress[`tr:${hash}`];
+					return newHashAndProgress;
+				});
+			}
+		},
+		[torrinKey, removeFromCache]
+	);
+
 	/**
-	 * Adds to TorBox, Premiumize or Offcloud and keeps the result only if the
-	 * service already had it.
+	 * Adds to TorBox, Premiumize, Offcloud or Torrin and keeps the result only if
+	 * the service already had it.
 	 *
 	 * Each of them has a cache probe, and a bulk run uses it to choose what to
 	 * add, but a probe answers for the service's cache rather than for what this
@@ -1004,16 +1054,20 @@ export function useTorrentManagement(
 	 * cached add comes back finished on all three (TorBox marks it
 	 * `download_finished` and present, Premiumize and Offcloud finish inside the
 	 * add), so anything short of 100% was a miss and is removed again rather than
-	 * left downloading in an account that was promised cached releases.
+	 * left downloading in an account that was promised cached releases. Torrin's
+	 * add answers downloaded, files and all, for what it holds; a miss there has
+	 * still started a download that counts against the plan's limits, which is
+	 * why the bulk actions only offer what its check called cached.
 	 */
 	const addVerified = useCallback(
 		async (
-			service: 'tb' | 'pm' | 'oc',
+			service: 'tb' | 'pm' | 'oc' | 'tr',
 			hash: string,
 			opts?: { silent?: boolean }
 		): Promise<boolean> => {
-			const key =
-				service === 'tb' ? torboxKey : service === 'pm' ? premiumizeKey : offcloudKey;
+			const key = { tb: torboxKey, pm: premiumizeKey, oc: offcloudKey, tr: torrinKey }[
+				service
+			];
 			if (!key) return false;
 
 			const label = SERVICE_LABELS[service];
@@ -1027,7 +1081,8 @@ export function useTorrentManagement(
 			try {
 				if (service === 'tb') await handleAddAsMagnetInTb(key, hash, capture, true);
 				else if (service === 'pm') await handleAddAsMagnetInPm(key, hash, capture, true);
-				else await handleAddAsMagnetInOc(key, hash, capture, true);
+				else if (service === 'oc') await handleAddAsMagnetInOc(key, hash, capture, true);
+				else await handleAddAsMagnetInTr(key, hash, capture, true);
 			} catch (error) {
 				if (!opts?.silent) toast.error(`${label} refused the add.`);
 				throw error;
@@ -1041,7 +1096,8 @@ export function useTorrentManagement(
 			if (!(row.progress >= 100)) {
 				if (service === 'tb') await handleDeleteTbTorrent(key, row.id, true);
 				else if (service === 'pm') await handleDeletePmTorrent(key, row.id, true);
-				else await handleDeleteOcTorrent(key, row.id, true);
+				else if (service === 'oc') await handleDeleteOcTorrent(key, row.id, true);
+				else await handleDeleteTrTorrent(key, row.id, true);
 				if (!opts?.silent) toast.error(`Not cached on ${label}; removed.`);
 				return false;
 			}
@@ -1055,7 +1111,7 @@ export function useTorrentManagement(
 			if (!opts?.silent) toast.success(`Added to ${label}.`);
 			return true;
 		},
-		[torboxKey, premiumizeKey, offcloudKey, addToCache]
+		[torboxKey, premiumizeKey, offcloudKey, torrinKey, addToCache]
 	);
 
 	/**
@@ -1121,6 +1177,7 @@ export function useTorrentManagement(
 		addOc,
 		addDl,
 		addPt,
+		addTr,
 		addCached,
 		sendTbToRd,
 		deleteRd,
@@ -1130,5 +1187,6 @@ export function useTorrentManagement(
 		deleteOc,
 		deleteDl,
 		deletePt,
+		deleteTr,
 	};
 }

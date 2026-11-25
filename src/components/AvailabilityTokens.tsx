@@ -9,6 +9,7 @@ interface AvailabilityTokensProps {
 	torboxKey?: string | null;
 	premiumizeKey?: string | null;
 	offcloudKey?: string | null;
+	torrinKey?: string | null;
 	// How many results a query would show; each button shows the count it filters to
 	countFor?: (query: string) => number;
 }
@@ -16,8 +17,9 @@ interface AvailabilityTokensProps {
 // Service colours match the library's torrent prefix badges (see utils/results.tsx):
 // RD green, AD amber, TB indigo, PM the dark red of Premiumize's own icon, OC
 // the orange of Offcloud's - far enough from AD's amber to tell apart in a badge
-// row, which is the whole point of the coding. Written out in full because
-// Tailwind only keeps class names it can find as literals.
+// row, which is the whole point of the coding - and TR the copper of Torrin's
+// own app. Written out in full because Tailwind only keeps class names it can
+// find as literals.
 const SERVICE_STYLES = {
 	rd: {
 		active: 'border-[#b5d496] bg-[#b5d496] text-black',
@@ -39,6 +41,10 @@ const SERVICE_STYLES = {
 		active: 'border-[#f97316] bg-[#f97316] text-black',
 		idle: 'border-[#f97316] bg-[#f97316]/10 text-[#f97316] hover:bg-[#f97316]/25',
 	},
+	tr: {
+		active: 'border-[#c8956c] bg-[#c8956c] text-black',
+		idle: 'border-[#c8956c] bg-[#c8956c]/10 text-[#c8956c] hover:bg-[#c8956c]/25',
+	},
 	// "any" is not a service, so it stays neutral rather than borrowing a colour
 	any: {
 		active: 'border-gray-300 bg-gray-200 text-black',
@@ -54,6 +60,7 @@ const AvailabilityTokens: FC<AvailabilityTokensProps> = ({
 	torboxKey,
 	premiumizeKey,
 	offcloudKey,
+	torrinKey,
 	countFor,
 }) => {
 	// Availability is only ever checked for services the user has a key for, so a
@@ -93,6 +100,13 @@ const AvailabilityTokens: FC<AvailabilityTokensProps> = ({
 			title: 'Show only results cached in Offcloud',
 			style: SERVICE_STYLES.oc,
 			key: offcloudKey,
+		},
+		{
+			token: 'is:tr',
+			label: 'TR',
+			title: 'Show only results cached in Torrin',
+			style: SERVICE_STYLES.tr,
+			key: torrinKey,
 		},
 	].filter((service) => !!service.key);
 

@@ -95,6 +95,7 @@ vi.mock('@/hooks/auth', () => ({
 	useOffcloudApiKey: () => null,
 	useDebridLinkCredential: () => null,
 	usePutioAccessToken: () => null,
+	useTorrinApiKey: () => null,
 }));
 
 vi.mock('@/hooks/useExternalSources', () => ({

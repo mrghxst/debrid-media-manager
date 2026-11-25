@@ -21,6 +21,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import useLocalStorage from '@/hooks/localStorage';
 import { useAnimeEntries } from '@/hooks/useAnimeEntries';
@@ -61,6 +62,7 @@ import {
 import {
 	checkAvailabilityOc,
 	checkAvailabilityPm,
+	checkAvailabilityTr,
 	checkDatabaseAvailabilityAd,
 	checkDatabaseAvailabilityDl,
 	checkDatabaseAvailabilityRd,
@@ -141,7 +143,8 @@ const INSTANT_SERVICES: {
 		| 'tbAvailable'
 		| 'pmAvailable'
 		| 'ocAvailable'
-		| 'dlAvailable';
+		| 'dlAvailable'
+		| 'trAvailable';
 	button: string;
 	icon: string;
 	/** The provider picker, in the service's identity colour (AGENTS.md). */
@@ -207,6 +210,16 @@ const INSTANT_SERVICES: {
 		icon: 'text-sky-300',
 		picked: 'border-[#38bdf8] bg-[#38bdf8] text-black',
 		unpicked: 'border-[#38bdf8] bg-gray-900/80 text-[#38bdf8] hover:bg-[#38bdf8]/20',
+	},
+	{
+		service: 'tr',
+		short: 'TR',
+		label: 'Torrin',
+		available: 'trAvailable',
+		button: 'border-[#c8956c] bg-[#c8956c]/20 text-orange-100 hover:bg-[#c8956c]/40',
+		icon: 'text-[#c8956c]',
+		picked: 'border-[#c8956c] bg-[#c8956c] text-black',
+		unpicked: 'border-[#c8956c] bg-gray-900/80 text-[#c8956c] hover:bg-[#c8956c]/20',
 	},
 ];
 
@@ -289,6 +302,7 @@ const TvSearch: FunctionComponent = () => {
 	// or the `is:` filters.
 	const debridLinkKey = useDebridLinkCredential();
 	const putioKey = usePutioAccessToken();
+	const torrinKey = useTorrinApiKey();
 
 	// Library sync status - used to prevent auto-availability check while library is still loading
 	const { isFetching: isLibrarySyncing, libraryItems } = useLibraryCache();
@@ -306,6 +320,7 @@ const TvSearch: FunctionComponent = () => {
 		pmAvailableCount?: number;
 		ocAvailableCount?: number;
 		dlAvailableCount?: number;
+		trAvailableCount?: number;
 		allSourcesCompleted: boolean;
 		pendingAvailabilityChecks: number;
 		isAvailabilityOnly?: boolean;
@@ -460,6 +475,8 @@ const TvSearch: FunctionComponent = () => {
 		deleteDl,
 		addPt,
 		deletePt,
+		addTr,
+		deleteTr,
 	} = useTorrentManagement(
 		rdKey,
 		adKey,
@@ -470,7 +487,8 @@ const TvSearch: FunctionComponent = () => {
 		imdbid as string,
 		searchResults,
 		setSearchResults,
-		putioKey
+		putioKey,
+		torrinKey
 	);
 
 	const { fetchEpisodeFromExternalSource, getEnabledSources } = useExternalSources(
@@ -499,7 +517,8 @@ const TvSearch: FunctionComponent = () => {
 		addAd,
 		deleteRd,
 		deleteAd,
-		sortPacks
+		sortPacks,
+		torrinKey
 	);
 
 	const reporterKeys = {
@@ -560,6 +579,7 @@ const TvSearch: FunctionComponent = () => {
 					tb: torboxKey,
 					pm: premiumizeKey,
 					oc: offcloudKey,
+					tr: torrinKey,
 				});
 			} catch (error) {
 				toast.error('Could not check the other seasons. Please try again.', {
@@ -689,7 +709,7 @@ const TvSearch: FunctionComponent = () => {
 				toast.error('The run failed part way through.', { id: runToast });
 			}
 		},
-		[showInfo, discoverSeasons, runSeasons, torboxKey, premiumizeKey, offcloudKey]
+		[showInfo, discoverSeasons, runSeasons, torboxKey, premiumizeKey, offcloudKey, torrinKey]
 	);
 
 	const instantServices = INSTANT_SERVICES.filter(
@@ -701,6 +721,7 @@ const TvSearch: FunctionComponent = () => {
 				pm: premiumizeKey,
 				oc: offcloudKey,
 				dl: debridLinkKey,
+				tr: torrinKey,
 			})[service]
 	);
 	// With several services the header shows one button per action and a picker
@@ -875,6 +896,7 @@ const TvSearch: FunctionComponent = () => {
 		let pmAvailableCount = 0;
 		let ocAvailableCount = 0;
 		let dlAvailableCount = 0;
+		let trAvailableCount = 0;
 		let pendingAvailabilityChecks = 0;
 		let allSourcesCompleted = false;
 		let finalResultCount = 0;
@@ -896,13 +918,15 @@ const TvSearch: FunctionComponent = () => {
 					tbAvailableCount +
 					pmAvailableCount +
 					ocAvailableCount +
-					dlAvailableCount,
+					dlAvailableCount +
+					trAvailableCount,
 				rdAvailableCount,
 				adAvailableCount,
 				tbAvailableCount,
 				pmAvailableCount,
 				ocAvailableCount,
 				dlAvailableCount,
+				trAvailableCount,
 				allSourcesCompleted: true,
 				pendingAvailabilityChecks: 0,
 			});
@@ -962,7 +986,8 @@ const TvSearch: FunctionComponent = () => {
 								!r.adAvailable &&
 								!r.tbAvailable &&
 								!r.pmAvailable &&
-								!r.ocAvailable
+								!r.ocAvailable &&
+								!r.trAvailable
 						)
 						.map((r) => r.hash);
 
@@ -1061,6 +1086,18 @@ const TvSearch: FunctionComponent = () => {
 						pendingAvailabilityChecks--;
 						checkAndShowFinalToast();
 					});
+				}
+
+				if (torrinKey) {
+					pendingAvailabilityChecks++;
+					// Read-only, and only Torrin's `cached` answer counts.
+					checkAvailabilityTr(torrinKey, hashesToCheck, setSearchResults, keepOrder)
+						.catch(() => 0)
+						.then((count) => {
+							trAvailableCount += count;
+							pendingAvailabilityChecks--;
+							checkAndShowFinalToast();
+						});
 				}
 
 				if (torboxKey) {
@@ -1304,7 +1341,8 @@ const TvSearch: FunctionComponent = () => {
 				!r.adAvailable &&
 				!r.tbAvailable &&
 				!r.pmAvailable &&
-				!r.ocAvailable
+				!r.ocAvailable &&
+				!r.trAvailable
 		).length;
 	}, [filteredResults]);
 
@@ -1321,6 +1359,7 @@ const TvSearch: FunctionComponent = () => {
 			pmAvailableCount,
 			ocAvailableCount,
 			dlAvailableCount,
+			trAvailableCount,
 			allSourcesCompleted,
 			pendingAvailabilityChecks,
 			isAvailabilityOnly,
@@ -1348,6 +1387,8 @@ const TvSearch: FunctionComponent = () => {
 				servicesWithCache.push(`OC: ${ocAvailableCount}`);
 			if (debridLinkKey && (dlAvailableCount ?? 0) > 0)
 				servicesWithCache.push(`DL: ${dlAvailableCount}`);
+			if (torrinKey && (trAvailableCount ?? 0) > 0)
+				servicesWithCache.push(`TR: ${trAvailableCount}`);
 
 			// Show toast for cached torrents if any found
 			if (totalAvailableCount > 0) {
@@ -1369,6 +1410,7 @@ const TvSearch: FunctionComponent = () => {
 		premiumizeKey,
 		offcloudKey,
 		debridLinkKey,
+		torrinKey,
 		isAnyChecking,
 		isLibrarySyncing,
 		checkServiceAvailabilityBulk,
@@ -2019,7 +2061,13 @@ const TvSearch: FunctionComponent = () => {
 
 	const headerActionButtons = (
 		<div data-testid="media-header-actions">
-			{(rdKey || adKey || torboxKey || premiumizeKey || offcloudKey || debridLinkKey) && (
+			{(rdKey ||
+				adKey ||
+				torboxKey ||
+				premiumizeKey ||
+				offcloudKey ||
+				debridLinkKey ||
+				torrinKey) && (
 				<>
 					{!noTorrents && (
 						<CheckAvailabilityButtons
@@ -2376,6 +2424,7 @@ const TvSearch: FunctionComponent = () => {
 										torboxKey={torboxKey}
 										premiumizeKey={premiumizeKey}
 										offcloudKey={offcloudKey}
+										torrinKey={torrinKey}
 										countFor={countFor}
 									/>
 								</div>
@@ -2437,6 +2486,9 @@ const TvSearch: FunctionComponent = () => {
 						putioKey={putioKey}
 						addPt={addPt}
 						deletePt={deletePt}
+						torrinKey={torrinKey}
+						addTr={addTr}
+						deleteTr={deleteTr}
 						imdbId={imdbid as string}
 						isHashServiceChecking={isHashServiceChecking}
 					/>

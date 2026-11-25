@@ -122,6 +122,7 @@ vi.mock('@/hooks/auth', () => ({
 	useOffcloudApiKey: vi.fn(),
 	useDebridLinkCredential: vi.fn(),
 	usePutioAccessToken: vi.fn(),
+	useTorrinApiKey: vi.fn(),
 }));
 
 const callsForService = (service: string) =>

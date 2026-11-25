@@ -7,6 +7,10 @@ import {
 import { CACHE_CHECK_CHUNK_SIZE, checkPremiumizeCache } from '@/services/premiumize';
 import { isRdThrottling, RD_BULK_ADD_SPACING_MS } from '@/services/realDebrid';
 import { checkCachedStatus, TorBoxCachedResponse } from '@/services/torbox';
+import {
+	checkTorrinCache,
+	CACHE_CHECK_CHUNK_SIZE as TR_CACHE_CHECK_CHUNK_SIZE,
+} from '@/services/torrin';
 import { recordDlAvailability } from '@/utils/availability';
 import { isRdBlockedName } from '@/utils/deInfringe';
 import { delay } from '@/utils/delay';
@@ -21,7 +25,7 @@ import { getCachedTrackerStats, shouldIncludeTrackerStats } from '@/utils/tracke
 import { useCallback, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
-export type DebridService = 'RD' | 'AD' | 'TB' | 'PM' | 'OC' | 'DL';
+export type DebridService = 'RD' | 'AD' | 'TB' | 'PM' | 'OC' | 'DL' | 'TR';
 
 // RD retired /instantAvailability, so the only way to ask whether it holds a
 // hash is to add the torrent and delete it again — which means a sweep of a
@@ -93,6 +97,9 @@ const markAvailableServices = (
 				result.ocAvailable || Boolean(availableHashesByService.OC?.has(result.hash));
 			const dlAvailable =
 				result.dlAvailable || Boolean(availableHashesByService.DL?.has(result.hash));
+			const trAvailable =
+				Boolean(result.trAvailable) ||
+				Boolean(availableHashesByService.TR?.has(result.hash));
 
 			if (
 				rdAvailable === result.rdAvailable &&
@@ -100,7 +107,8 @@ const markAvailableServices = (
 				tbAvailable === result.tbAvailable &&
 				pmAvailable === result.pmAvailable &&
 				ocAvailable === result.ocAvailable &&
-				dlAvailable === result.dlAvailable
+				dlAvailable === result.dlAvailable &&
+				trAvailable === Boolean(result.trAvailable)
 			) {
 				return result;
 			}
@@ -114,6 +122,7 @@ const markAvailableServices = (
 				pmAvailable,
 				ocAvailable,
 				dlAvailable,
+				trAvailable,
 			};
 			delete updated.trackerStats;
 			return updated;
@@ -138,7 +147,8 @@ export function useAvailabilityCheck(
 	addAd: (hash: string, isCheckingAvailability: boolean) => Promise<any>,
 	deleteRd: (hash: string) => Promise<void>,
 	deleteAd: (hash: string) => Promise<void>,
-	sortFunction: (searchResults: SearchResult[]) => SearchResult[]
+	sortFunction: (searchResults: SearchResult[]) => SearchResult[],
+	torrinKey: string | null = null
 ) {
 	const [checkingSet, setCheckingSet] = useState<Set<string>>(new Set());
 	const isMounted = useRef(true);
@@ -174,6 +184,7 @@ export function useAvailabilityCheck(
 			if (premiumizeKey) available.push('PM');
 			if (offcloudKey) available.push('OC');
 			if (debridLinkKey) available.push('DL');
+			if (torrinKey) available.push('TR');
 
 			if (!requested || requested.length === 0) {
 				return available;
@@ -182,7 +193,7 @@ export function useAvailabilityCheck(
 			const requestedSet = new Set(requested);
 			return available.filter((service) => requestedSet.has(service));
 		},
-		[rdKey, adKey, torboxKey, premiumizeKey, offcloudKey, debridLinkKey]
+		[rdKey, adKey, torboxKey, premiumizeKey, offcloudKey, debridLinkKey, torrinKey]
 	);
 
 	const isServiceAvailable = useCallback((service: DebridService, result: SearchResult) => {
@@ -199,6 +210,8 @@ export function useAvailabilityCheck(
 				return Boolean(result.ocAvailable);
 			case 'DL':
 				return Boolean(result.dlAvailable);
+			case 'TR':
+				return Boolean(result.trAvailable);
 			default:
 				return false;
 		}
@@ -254,6 +267,7 @@ export function useAvailabilityCheck(
 					pmCheckResult,
 					ocCheckResult,
 					dlCheckResult,
+					trCheckResult,
 					trackerStatsResult,
 				] = await Promise.allSettled([
 					// RD availability check
@@ -385,6 +399,16 @@ export function useAvailabilityCheck(
 							})()
 						: Promise.resolve({ isCachedInDL: Boolean(result.dlAvailable) }),
 
+					// Torrin availability check. Read-only, and only `cached` counts:
+					// `acceleratable` is an upstream's claim, measured to come back
+					// for hashes that name no torrent at all.
+					torrinKey && servicesNeedingCheck.includes('TR')
+						? (async () => {
+								const [probe] = await checkTorrinCache(torrinKey, [result.hash]);
+								return { isCachedInTR: probe?.status === 'cached' };
+							})()
+						: Promise.resolve({ isCachedInTR: Boolean(result.trAvailable) }),
+
 					// Tracker stats check (only if enabled and not already available)
 					(async () => {
 						if (
@@ -394,7 +418,8 @@ export function useAvailabilityCheck(
 							result.tbAvailable ||
 							result.pmAvailable ||
 							result.ocAvailable ||
-							result.dlAvailable
+							result.dlAvailable ||
+							result.trAvailable
 						) {
 							return null;
 						}
@@ -482,6 +507,14 @@ export function useAvailabilityCheck(
 					console.error('Debrid-Link availability check failed:', dlCheckResult.reason);
 				}
 
+				// Process Torrin check result
+				let isCachedInTR = Boolean(result.trAvailable);
+				if (trCheckResult.status === 'fulfilled') {
+					isCachedInTR = trCheckResult.value.isCachedInTR;
+				} else if (torrinKey && servicesNeedingCheck.includes('TR')) {
+					console.error('Torrin availability check failed:', trCheckResult.reason);
+				}
+
 				const positiveAvailability: Partial<Record<DebridService, Set<string>>> = {};
 				if (isCachedInRD) positiveAvailability.RD = new Set([result.hash]);
 				if (isCachedInAD) positiveAvailability.AD = new Set([result.hash]);
@@ -489,6 +522,7 @@ export function useAvailabilityCheck(
 				if (isCachedInPM) positiveAvailability.PM = new Set([result.hash]);
 				if (isCachedInOC) positiveAvailability.OC = new Set([result.hash]);
 				if (isCachedInDL) positiveAvailability.DL = new Set([result.hash]);
+				if (isCachedInTR) positiveAvailability.TR = new Set([result.hash]);
 
 				if (Object.keys(positiveAvailability).length > 0 && isMounted.current) {
 					markAvailableServices(setSearchResults, sortFunction, positiveAvailability);
@@ -503,7 +537,8 @@ export function useAvailabilityCheck(
 					!isCachedInTB &&
 					!isCachedInPM &&
 					!isCachedInOC &&
-					!isCachedInDL
+					!isCachedInDL &&
+					!isCachedInTR
 				) {
 					const trackerStats = trackerStatsResult.value;
 
@@ -531,7 +566,8 @@ export function useAvailabilityCheck(
 					!isCachedInAD &&
 					!isCachedInTB &&
 					!isCachedInPM &&
-					!isCachedInOC
+					!isCachedInOC &&
+					!isCachedInTR
 				) {
 					console.error('Failed to get tracker stats:', trackerStatsResult.reason);
 				}
@@ -604,6 +640,7 @@ export function useAvailabilityCheck(
 			torboxKey,
 			premiumizeKey,
 			offcloudKey,
+			torrinKey,
 			searchResults,
 			setSearchResults,
 			hashAndProgress,
@@ -685,6 +722,9 @@ export function useAvailabilityCheck(
 			const dlTargets = services.includes('DL')
 				? torrentsToCheck.filter((r) => !r.dlAvailable)
 				: [];
+			const trTargets = services.includes('TR')
+				? torrentsToCheck.filter((r) => !r.trAvailable)
+				: [];
 
 			const checkProgress: Record<DebridService, { completed: number; total: number }> = {
 				RD: { completed: 0, total: rdTargets.length },
@@ -693,6 +733,7 @@ export function useAvailabilityCheck(
 				PM: { completed: 0, total: pmTargets.length },
 				OC: { completed: 0, total: ocTargets.length },
 				DL: { completed: 0, total: dlTargets.length },
+				TR: { completed: 0, total: trTargets.length },
 			};
 			let statsProgress = { completed: 0, total: 0 };
 			let torrentsWithSeeds = 0;
@@ -703,6 +744,7 @@ export function useAvailabilityCheck(
 				PM: 0,
 				OC: 0,
 				DL: 0,
+				TR: 0,
 			};
 
 			const updateProgressMessage = () => {
@@ -747,6 +789,7 @@ export function useAvailabilityCheck(
 					pmCheckResults,
 					ocCheckResults,
 					dlCheckResults,
+					trCheckResults,
 					trackerStatsResults,
 				] = await Promise.all([
 					// RD availability checks, one at a time and paced — see
@@ -1070,6 +1113,47 @@ export function useAvailabilityCheck(
 							})()
 						: Promise.resolve([]),
 
+					// Torrin availability checks: read-only, in chunks Torrin can
+					// answer inside its own 20 s budget. Only `cached` counts.
+					services.includes('TR')
+						? (async () => {
+								const cached = new Set<string>();
+								for (
+									let i = 0;
+									i < trTargets.length;
+									i += TR_CACHE_CHECK_CHUNK_SIZE
+								) {
+									const batch = trTargets.slice(i, i + TR_CACHE_CHECK_CHUNK_SIZE);
+									const probes = await checkTorrinCache(
+										torrinKey!,
+										batch.map((t) => t.hash)
+									);
+									for (const probe of probes) {
+										if (probe.status === 'cached') cached.add(probe.hash);
+									}
+									checkProgress.TR = {
+										completed: Math.min(
+											i + TR_CACHE_CHECK_CHUNK_SIZE,
+											trTargets.length
+										),
+										total: trTargets.length,
+									};
+									updateProgressMessage();
+								}
+
+								return trTargets.map((result) => {
+									const isCachedInTR = cached.has(result.hash.toLowerCase());
+									if (isCachedInTR) realtimeAvailable.TR++;
+									removeChecking(result.hash, ['TR']);
+									return {
+										item: result,
+										success: true,
+										result: { result, isCachedInTR },
+									};
+								});
+							})()
+						: Promise.resolve([]),
+
 					// Tracker stats checks (only for non-available torrents)
 					(async () => {
 						if (!shouldIncludeTrackerStats()) {
@@ -1083,7 +1167,8 @@ export function useAvailabilityCheck(
 								!t.adAvailable &&
 								!t.tbAvailable &&
 								!t.pmAvailable &&
-								!t.ocAvailable
+								!t.ocAvailable &&
+								!t.trAvailable
 						);
 
 						if (torrentsNeedingStats.length === 0) {
@@ -1156,6 +1241,9 @@ export function useAvailabilityCheck(
 					...dlCheckResults
 						.filter((r) => r.success && r.result?.isCachedInDL)
 						.map((r) => r.item.hash),
+					...trCheckResults
+						.filter((r) => r.success && r.result?.isCachedInTR)
+						.map((r) => r.item.hash),
 				]);
 
 				// Apply tracker stats only to non-cached torrents
@@ -1179,6 +1267,7 @@ export function useAvailabilityCheck(
 					...pmCheckResults,
 					...ocCheckResults,
 					...dlCheckResults,
+					...trCheckResults,
 				];
 				const succeeded = allResults.filter((r) => r.success);
 				const failed = allResults.filter((r) => !r.success);
@@ -1194,6 +1283,7 @@ export function useAvailabilityCheck(
 					PM: 0,
 					OC: 0,
 					DL: 0,
+					TR: 0,
 				};
 
 				// Update database cache and get final count
@@ -1215,6 +1305,9 @@ export function useAvailabilityCheck(
 						.map((r) => r.item.hash);
 					const dlSuccessfulHashes = dlCheckResults
 						.filter((r) => r.success && r.result?.isCachedInDL)
+						.map((r) => r.item.hash);
+					const trSuccessfulHashes = trCheckResults
+						.filter((r) => r.success && r.result?.isCachedInTR)
 						.map((r) => r.item.hash);
 
 					const positiveAvailability: Partial<Record<DebridService, Set<string>>> = {};
@@ -1241,6 +1334,10 @@ export function useAvailabilityCheck(
 					if (dlSuccessfulHashes.length > 0) {
 						positiveAvailability.DL = new Set(dlSuccessfulHashes);
 						availableByService.DL = dlSuccessfulHashes.length;
+					}
+					if (trSuccessfulHashes.length > 0) {
+						positiveAvailability.TR = new Set(trSuccessfulHashes);
+						availableByService.TR = trSuccessfulHashes.length;
 					}
 
 					if (Object.keys(positiveAvailability).length > 0) {
@@ -1394,6 +1491,7 @@ export function useAvailabilityCheck(
 			torboxKey,
 			premiumizeKey,
 			offcloudKey,
+			torrinKey,
 			setSearchResults,
 			hashAndProgress,
 			addRd,

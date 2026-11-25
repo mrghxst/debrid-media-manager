@@ -166,6 +166,26 @@ describe('AvailabilityTokens', () => {
 		fireEvent.click(screen.getByText('OC ✓'));
 		expect(onQueryChange).toHaveBeenCalledWith('1080p is:oc');
 	});
+
+	it('offers a Torrin pill once a Torrin key exists, in its copper, and swaps tokens', () => {
+		const { rerender } = render(
+			<AvailabilityTokens query="" onQueryChange={onQueryChange} offcloudKey="oc-key" />
+		);
+		expect(screen.queryByText('TR ✓')).not.toBeInTheDocument();
+
+		rerender(
+			<AvailabilityTokens
+				query="1080p is:oc"
+				onQueryChange={onQueryChange}
+				offcloudKey="oc-key"
+				torrinKey="tr-key"
+			/>
+		);
+
+		fireEvent.click(screen.getByText('TR ✓'));
+		expect(onQueryChange).toHaveBeenCalledWith('1080p is:tr');
+		expect(screen.getByText('TR ✓').className).toContain('[#c8956c]');
+	});
 	it('counts what each button would show, and the current results for the active one', () => {
 		const counts: Record<string, number> = {
 			'1080p is:rd': 7,

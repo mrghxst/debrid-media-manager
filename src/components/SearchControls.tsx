@@ -17,6 +17,7 @@ interface SearchControlsProps {
 	premiumizeKey?: string | null;
 	offcloudKey?: string | null;
 	debridLinkKey?: string | null;
+	torrinKey?: string | null;
 	onMassReport: (type: 'porn' | 'wrong_imdb' | 'wrong_season') => void;
 	mediaType: 'movie' | 'tv';
 	title: string;
@@ -41,6 +42,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
 	premiumizeKey,
 	offcloudKey,
 	debridLinkKey,
+	torrinKey,
 	onMassReport,
 	mediaType,
 	title,
@@ -162,6 +164,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
 					torboxKey={torboxKey}
 					premiumizeKey={premiumizeKey}
 					offcloudKey={offcloudKey}
+					torrinKey={torrinKey}
 					countFor={countFor}
 				/>
 			</div>

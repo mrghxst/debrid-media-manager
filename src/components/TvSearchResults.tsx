@@ -120,6 +120,14 @@ type TvSearchResultsProps = {
 	putioKey?: string | null;
 	addPt?: (hash: string) => Promise<void>;
 	deletePt?: (hash: string) => Promise<void>;
+	/**
+	 * Torrin's API key. Its cache check runs in the page sweep and sets
+	 * `trAvailable`; adding anything it does not hold starts a download that
+	 * counts against the plan's limits.
+	 */
+	torrinKey?: string | null;
+	addTr?: (hash: string) => Promise<void>;
+	deleteTr?: (hash: string) => Promise<void>;
 	imdbId?: string;
 	isHashServiceChecking: (hash: string, service: DebridService) => boolean;
 };
@@ -164,6 +172,9 @@ const TvSearchResults: React.FC<TvSearchResultsProps> = ({
 	putioKey,
 	addPt,
 	deletePt,
+	torrinKey,
+	addTr,
+	deleteTr,
 	imdbId,
 	isHashServiceChecking,
 }) => {
@@ -1245,6 +1256,45 @@ const TvSearchResults: React.FC<TvSearchResultsProps> = ({
 													>
 														<Download className="mr-2 inline h-3 w-3" />
 														Add to PT
+													</button>
+												)}
+											</span>
+										)}
+
+										{torrinKey && (
+											<span
+												data-action-group="tr"
+												className="inline-flex max-w-full flex-wrap items-center gap-1"
+											>
+												{/* — TR —
+	    Instant only on Torrin's `cached` answer; anything else downloads. */}
+												{inLibrary('tr', r.hash) && (
+													<button
+														className={`haptic-sm inline rounded border-2 border-red-500 bg-red-900/30 px-1 text-xs text-red-100 transition-colors hover:bg-red-800/50 ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+														onClick={() => deleteTr?.(r.hash)}
+														disabled={isLoading}
+													>
+														<X className="mr-2 inline h-3 w-3" />
+														{`TR (${hashAndProgress[`tr:${r.hash}`] + '%'})`}
+													</button>
+												)}
+												{notInLibrary('tr', r.hash) && (
+													<button
+														className={`haptic-sm inline rounded border-2 px-1 text-xs transition-colors ${addButtonClass(!!r.trAvailable, r.noVideos)} ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+														onClick={() => addTr?.(r.hash)}
+														disabled={isLoading}
+														title={
+															r.trAvailable
+																? 'Torrin holds this — it will be ready at once'
+																: 'Not cached on Torrin — adding starts a download that counts against your plan'
+														}
+													>
+														<Download className="mr-2 inline h-3 w-3" />
+														{r.trAvailable ? (
+															<b>Instant TR</b>
+														) : (
+															'Add to TR'
+														)}
 													</button>
 												)}
 											</span>

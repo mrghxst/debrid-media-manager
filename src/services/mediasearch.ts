@@ -23,6 +23,8 @@ export type SearchResult = {
 	pmAvailable: boolean; // Premiumize
 	ocAvailable: boolean; // Offcloud
 	dlAvailable: boolean; // Debrid-Link
+	/** Torrin: only its `cached` answer, never `acceleratable`. */
+	trAvailable?: boolean;
 	files: FileData[];
 	// `files` is the last listing to answer that holds a video, or the only
 	// listing if none does (see applyProviderFiles). The checks run concurrently
@@ -81,6 +83,7 @@ export interface EnrichedHashlistTorrent extends HashlistTorrent {
 	pmAvailable: boolean; // Premiumize
 	ocAvailable: boolean; // Offcloud
 	dlAvailable: boolean; // Debrid-Link
+	trAvailable?: boolean; // Torrin
 	files: FileData[];
 	rdFiles?: FileData[];
 	tbFiles?: FileData[];

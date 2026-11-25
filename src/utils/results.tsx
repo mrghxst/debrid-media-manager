@@ -78,7 +78,8 @@ export const isAvailable = (result: SearchResult) =>
 		result.tbAvailable ||
 		result.pmAvailable ||
 		result.ocAvailable ||
-		result.dlAvailable
+		result.dlAvailable ||
+		result.trAvailable
 	);
 
 /**

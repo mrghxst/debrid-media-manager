@@ -7,15 +7,16 @@ import {
 	deletePremiumizeTransfer,
 } from '@/services/premiumize';
 import {
-	PutioError,
 	cancelPutioTransfers,
 	deletePutioFiles,
 	getPutioAccountInfo,
 	getPutioTransfer,
+	PutioError,
 	removePutioTransfers,
 } from '@/services/putio';
 import { deleteTorrent as deleteRdTorrent } from '@/services/realDebrid';
 import { deleteTorrent as deleteTbTorrent, deleteWebDownload } from '@/services/torbox';
+import { deleteTorrinMagnet, TorrinError } from '@/services/torrin';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import Modal from '../components/modals/modal';
@@ -24,6 +25,7 @@ import { parsePremiumizeRowId } from './premiumizeRow';
 import { parsePutioRowId } from './putioRow';
 import { magnetToastOptions } from './toastOptions';
 import { isWebDownloadRowId, parseTorBoxRowId } from './torboxWebDownload';
+import { parseTorrinRowId } from './torrinRow';
 
 // Extract error message from any error type
 // API-level errors are thrown as plain Error by service functions,
@@ -190,6 +192,41 @@ export const handleDeleteOcTorrent = async (
 		);
 		return false;
 	}
+};
+
+/**
+ * Removes a Torrin download from the account.
+ *
+ * A 404 counts as done: the download is gone either way, and the row should
+ * go with it. A release still seeding toward its target is refused with a 409
+ * and Torrin's own message, and the row stays so it can be retried later.
+ */
+export const handleDeleteTrTorrent = async (
+	trKey: string,
+	id: string,
+	disableToast: boolean = false
+): Promise<boolean> => {
+	const downloadId = parseTorrinRowId(id);
+	if (!downloadId) {
+		toast.error(`Unrecognised Torrin row ${id}.`);
+		return false;
+	}
+	try {
+		await deleteTorrinMagnet(trKey, downloadId);
+	} catch (error) {
+		if (!(error instanceof TorrinError && error.status === 404)) {
+			console.error(
+				'Error deleting Torrin download:',
+				error instanceof TorrinError ? error.code : 'unknown'
+			);
+			toast.error(
+				error instanceof TorrinError ? error.message : `Failed to delete ${id} in Torrin.`
+			);
+			return false;
+		}
+	}
+	if (!disableToast) toast(`Deleted ${id} from Torrin.`, magnetToastOptions);
+	return true;
 };
 
 /**

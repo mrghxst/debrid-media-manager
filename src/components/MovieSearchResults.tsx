@@ -110,6 +110,14 @@ type MovieSearchResultsProps = {
 	putioKey?: string | null;
 	addPt?: (hash: string) => Promise<void>;
 	deletePt?: (hash: string) => Promise<void>;
+	/**
+	 * Torrin's API key. Its cache check runs in the page sweep and sets
+	 * `trAvailable`; adding anything it does not hold starts a download that
+	 * counts against the plan's limits.
+	 */
+	torrinKey?: string | null;
+	addTr?: (hash: string) => Promise<void>;
+	deleteTr?: (hash: string) => Promise<void>;
 	imdbId?: string;
 	isHashServiceChecking: (hash: string, service: DebridService) => boolean;
 };
@@ -152,6 +160,9 @@ const MovieSearchResults = ({
 	putioKey,
 	addPt,
 	deletePt,
+	torrinKey,
+	addTr,
+	deleteTr,
 	imdbId,
 	isHashServiceChecking,
 }: MovieSearchResultsProps) => {
@@ -364,6 +375,32 @@ const MovieSearchResults = ({
 		setLoadingHashes((prev) => new Set(prev).add(hash));
 		try {
 			await deletePt(hash);
+		} finally {
+			setLoadingHashes((prev) => {
+				const newSet = new Set(prev);
+				newSet.delete(hash);
+				return newSet;
+			});
+		}
+	};
+	const handleAddTr = async (hash: string) => {
+		if (!addTr || loadingHashes.has(hash)) return;
+		setLoadingHashes((prev) => new Set(prev).add(hash));
+		try {
+			await addTr(hash);
+		} finally {
+			setLoadingHashes((prev) => {
+				const newSet = new Set(prev);
+				newSet.delete(hash);
+				return newSet;
+			});
+		}
+	};
+	const handleDeleteTr = async (hash: string) => {
+		if (!deleteTr || loadingHashes.has(hash)) return;
+		setLoadingHashes((prev) => new Set(prev).add(hash));
+		try {
+			await deleteTr(hash);
 		} finally {
 			setLoadingHashes((prev) => {
 				const newSet = new Set(prev);
@@ -1283,6 +1320,57 @@ const MovieSearchResults = ({
 													<Download className="mr-2 inline h-3 w-3" />
 												)}
 												{isLoading ? 'Adding...' : 'Add to PT'}
+											</button>
+										)}
+									</span>
+								)}
+
+								{torrinKey && (
+									<span
+										data-action-group="tr"
+										className="inline-flex max-w-full flex-wrap items-center gap-1"
+									>
+										{/* — TR —
+	    Instant only on Torrin's `cached` answer; anything else downloads. */}
+										{inLibrary('tr', r.hash) && (
+											<button
+												className={`haptic-sm inline rounded border-2 border-red-500 bg-red-900/30 px-1 text-xs text-red-100 transition-colors hover:bg-red-800/50 ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+												onClick={() => handleDeleteTr(r.hash)}
+												disabled={isLoading}
+											>
+												{isLoading ? (
+													<Loader2 className="inline-block h-3 w-3 animate-spin" />
+												) : (
+													<X className="mr-2 inline h-3 w-3" />
+												)}
+												{isLoading
+													? 'Removing...'
+													: `TR (${hashAndProgress[`tr:${r.hash}`] + '%'})`}
+											</button>
+										)}
+										{notInLibrary('tr', r.hash) && (
+											<button
+												className={`haptic-sm inline rounded border-2 px-1 text-xs transition-colors ${addButtonClass(!!r.trAvailable, r.noVideos)} ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+												onClick={() => handleAddTr(r.hash)}
+												disabled={isLoading}
+												title={
+													r.trAvailable
+														? 'Torrin holds this — it will be ready at once'
+														: 'Not cached on Torrin — adding starts a download that counts against your plan'
+												}
+											>
+												{isLoading ? (
+													<Loader2 className="inline-block h-3 w-3 animate-spin" />
+												) : (
+													<Download className="mr-2 inline h-3 w-3" />
+												)}
+												{isLoading ? (
+													'Adding...'
+												) : r.trAvailable ? (
+													<b>Instant TR</b>
+												) : (
+													'Add to TR'
+												)}
 											</button>
 										)}
 									</span>

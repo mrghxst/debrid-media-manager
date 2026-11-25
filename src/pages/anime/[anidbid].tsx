@@ -14,6 +14,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { useAvailabilityCheck } from '@/hooks/useAvailabilityCheck';
 import { useTorrentManagement } from '@/hooks/useTorrentManagement';
@@ -39,6 +40,7 @@ import {
 import {
 	checkAvailabilityOc,
 	checkAvailabilityPm,
+	checkAvailabilityTr,
 	checkDatabaseAvailabilityAd,
 	checkDatabaseAvailabilityDl,
 	checkDatabaseAvailabilityRd,
@@ -100,7 +102,12 @@ const PAGE_SIZE = 50;
 const torrentDB = new UserTorrentDB();
 
 const unavailable = (r: SearchResult) =>
-	!r.rdAvailable && !r.adAvailable && !r.tbAvailable && !r.pmAvailable && !r.ocAvailable;
+	!r.rdAvailable &&
+	!r.adAvailable &&
+	!r.tbAvailable &&
+	!r.pmAvailable &&
+	!r.ocAvailable &&
+	!r.trAvailable;
 
 /**
  * An AniDB entry's page: the anime equivalent of `/show/[imdbid]/[seasonNum]`.
@@ -157,6 +164,7 @@ const AnimePage: FunctionComponent = () => {
 	const offcloudKey = useOffcloudApiKey();
 	const debridLinkKey = useDebridLinkCredential();
 	const putioKey = usePutioAccessToken();
+	const torrinKey = useTorrinApiKey();
 
 	// A bare `/anime/anidb-17617` from the old page or a search id: one address.
 	useEffect(() => {
@@ -200,6 +208,8 @@ const AnimePage: FunctionComponent = () => {
 		deleteDl,
 		addPt,
 		deletePt,
+		addTr,
+		deleteTr,
 	} = useTorrentManagement(
 		rdKey,
 		adKey,
@@ -210,7 +220,8 @@ const AnimePage: FunctionComponent = () => {
 		imdbId,
 		searchResults,
 		setSearchResults,
-		putioKey
+		putioKey,
+		torrinKey
 	);
 
 	// AniDB's episode count, 0 while unknown: a cached pack ranks on its largest that
@@ -244,7 +255,8 @@ const AnimePage: FunctionComponent = () => {
 		addAd,
 		deleteRd,
 		deleteAd,
-		sortPacks
+		sortPacks,
+		torrinKey
 	);
 
 	useEffect(() => {
@@ -308,14 +320,15 @@ const AnimePage: FunctionComponent = () => {
 		let pendingChecks = 0;
 		let resultCount = 0;
 		let hiddenCount = 0;
-		const cached = { rd: 0, ad: 0, tb: 0, pm: 0, oc: 0, dl: 0 };
+		const cached = { rd: 0, ad: 0, tb: 0, pm: 0, oc: 0, dl: 0, tr: 0 };
 		// Availability answers only mark rows; the list is sorted once, when every
 		// check is in, so rows do not jump back and forth while they land (#370)
 		const keepOrder = (results: SearchResult[]) => results;
 		const finish = () => {
 			if (pendingChecks > 0 || !isMounted.current) return;
 			setSearchResults((prev) => sortPacks([...prev]));
-			const total = cached.rd + cached.ad + cached.tb + cached.pm + cached.oc + cached.dl;
+			const total =
+				cached.rd + cached.ad + cached.tb + cached.pm + cached.oc + cached.dl + cached.tr;
 			if (total > 0) {
 				const parts = (
 					[
@@ -325,6 +338,7 @@ const AnimePage: FunctionComponent = () => {
 						['PM', cached.pm],
 						['OC', cached.oc],
 						['DL', cached.dl],
+						['TR', cached.tr],
 					] as const
 				)
 					.filter(([, n]) => n > 0)
@@ -471,6 +485,13 @@ const AnimePage: FunctionComponent = () => {
 							keepOrder
 						),
 						'oc'
+					);
+				}
+				if (torrinKey) {
+					// Read-only, and only Torrin's `cached` answer counts.
+					track(
+						checkAvailabilityTr(torrinKey, hashesToCheck, setSearchResults, keepOrder),
+						'tr'
 					);
 				}
 				if (torboxKey) {
@@ -891,6 +912,7 @@ const AnimePage: FunctionComponent = () => {
 						torboxKey={torboxKey}
 						premiumizeKey={premiumizeKey}
 						offcloudKey={offcloudKey}
+						torrinKey={torrinKey}
 						countFor={countFor}
 					/>
 				</div>
@@ -938,6 +960,9 @@ const AnimePage: FunctionComponent = () => {
 				putioKey={putioKey}
 				addPt={addPt}
 				deletePt={deletePt}
+				torrinKey={torrinKey}
+				addTr={addTr}
+				deleteTr={deleteTr}
 				imdbId={mediaKey}
 				isHashServiceChecking={isHashServiceChecking}
 			/>

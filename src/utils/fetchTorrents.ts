@@ -18,6 +18,7 @@ import {
 import { putioTransferHash, type PutioTransfer } from '@/services/putio';
 import { getTorrentInfo, getUserTorrentsList } from '@/services/realDebrid';
 import { getTorrentList, getWebDownloadList } from '@/services/torbox';
+import { torrinMagnetHash, torrinMagnetStatus, type TorrinMagnet } from '@/services/torrin';
 import { TorBoxTorrentInfo, TorBoxWebDownload, UserTorrentResponse } from '@/services/types';
 import { UserTorrent, UserTorrentStatus } from '@/torrent/userTorrent';
 import { delay } from '@/utils/delay';
@@ -36,6 +37,7 @@ import { getPutioUserTorrentStatus, parsePutioDate, toPutioRowId } from './putio
 import { checkArithmeticSequenceInFilenames, isVideo } from './selectable';
 import { genericToastOptions } from './toastOptions';
 import { toWebDownloadRowId } from './torboxWebDownload';
+import { getTorrinStatusText, getTorrinUserTorrentStatus, toTorrinRowId } from './torrinRow';
 
 // Extract error message from any error type
 const getErrorMessage = (error: unknown): string | null => {
@@ -1148,6 +1150,57 @@ export function convertToPutioUserTorrent(
 		selectedFiles: [],
 		seeders: transfer.peers_sending_to_us ?? 0,
 		speed: transfer.down_speed ?? 0,
+	};
+}
+
+// ==================== Torrin ====================
+
+/**
+ * Builds a library row from a Torrin download.
+ *
+ * Every field but `id` is read as possibly missing. A queued add is named after
+ * the magnet's `dn` and has size 0 until Torrin has read it. Files and their
+ * links are left out on purpose, as for put.io: each link is a signed stream
+ * URL good for a day, so the info modal fetches them when it opens.
+ */
+export function convertToTorrinUserTorrent(magnet: TorrinMagnet, knownHash?: string): UserTorrent {
+	const hash = (knownHash || torrinMagnetHash(magnet)).toLowerCase();
+	const filename = magnet.name?.trim() || hash || 'noname';
+	const torrinStatus = torrinMagnetStatus(magnet);
+	const [status, progress] = getTorrinUserTorrentStatus(torrinStatus);
+
+	let mediaType: UserTorrent['mediaType'] = getTypeByNameAndFileCount(filename);
+	let info: ParsedFilename | undefined;
+	try {
+		info = mediaType === 'movie' ? filenameParse(filename) : filenameParse(filename, true);
+	} catch {
+		// flip the condition if parsing throws, exactly as the other services do
+		mediaType = mediaType === 'movie' ? 'tv' : 'movie';
+		try {
+			info = mediaType === 'movie' ? filenameParse(filename) : filenameParse(filename, true);
+		} catch {
+			info = undefined;
+		}
+	}
+	if (info && (!info.title || !/w/.test(info.title))) info = undefined;
+
+	const added = magnet.added_at ? new Date(magnet.added_at) : null;
+	return {
+		id: toTorrinRowId(magnet.id),
+		filename,
+		title: getMediaId(info ?? filename, mediaType, false) || filename,
+		hash,
+		bytes: typeof magnet.size === 'number' && magnet.size > 0 ? magnet.size : 0,
+		progress,
+		status,
+		serviceStatus: getTorrinStatusText(torrinStatus),
+		added: added && !Number.isNaN(added.getTime()) ? added : new Date(),
+		mediaType,
+		info,
+		links: [],
+		selectedFiles: [],
+		seeders: 0,
+		speed: 0,
 	};
 }
 

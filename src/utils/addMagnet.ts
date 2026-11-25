@@ -63,6 +63,7 @@ import {
 	getWebDownloadList,
 	TorBoxRateLimitError,
 } from '@/services/torbox';
+import { addTorrinMagnet, TorrinError } from '@/services/torrin';
 import { TorBoxTorrentInfo, TorBoxWebDownload, TorrentInfoResponse } from '@/services/types';
 import { UserTorrent, UserTorrentStatus } from '@/torrent/userTorrent';
 import { delay } from '@/utils/delay';
@@ -80,6 +81,7 @@ import {
 	convertToPutioUserTorrent,
 	convertToTbUserTorrent,
 	convertToTbWebDownloadUserTorrent,
+	convertToTorrinUserTorrent,
 } from './fetchTorrents';
 import {
 	isRdAddRefusal,
@@ -1747,5 +1749,124 @@ export const handleAddMultipleTorrentFilesInPt = async (
 	}
 	if (callback) await callback();
 	toast(`Added ${added} torrent file${added === 1 ? '' : 's'} to put.io.`, magnetToastOptions);
+	if (stoppedBy) toast.error(`${stoppedBy} Stopped early.`, magnetToastOptions);
+};
+
+/**
+ * Spacing between a sweep's adds. Torrin has no batch add, and its request
+ * limiter allows 30 a second, so this stays far under it.
+ */
+const TR_BATCH_DELAY = process.env.VITEST_WORKER_ID ? 0 : 250;
+
+/** Hashes with a Torrin add under way in this tab, so a second click cannot add twice. */
+const trAddsInFlight = new Set<string>();
+
+/** Torrin's refusals are already readable (see `TorrinError`); anything else is not. */
+const trErrorMessage = (error: unknown): string | null =>
+	error instanceof TorrinError ? error.message : null;
+
+/**
+ * A refusal of the account rather than of one release: signed out, a plan
+ * that is paused or expired, the request limiter, or a download quota or full
+ * queue. Every later add in a sweep would get the same answer.
+ */
+const isTorrinAccountRefusal = (error: unknown): boolean =>
+	error instanceof TorrinError && [401, 403, 429].includes(error.status);
+
+/**
+ * Adds a magnet or hash to Torrin.
+ *
+ * Nothing needs asking first: Torrin dedupes per account and hash, so adding
+ * something already there hands back the download it has. Something Torrin
+ * holds comes back downloaded at once; anything else starts a download, which
+ * counts against the plan's limits. Logs carry the error code only.
+ */
+export const handleAddAsMagnetInTr = async (
+	trKey: string,
+	hash: string,
+	callback?: (torrent: UserTorrent) => Promise<void>,
+	silent: boolean = false
+) => {
+	const sourceHash = extractTorrentInputs(hash)[0]?.hash ?? null;
+	if (!sourceHash || !isValidHash(sourceHash)) {
+		if (!silent) toast.error('That is not a valid info hash.', magnetToastOptions);
+		throw new TorrinError('That is not a valid info hash.', 'invalid_info_hash');
+	}
+	if (trAddsInFlight.has(sourceHash)) return;
+	trAddsInFlight.add(sourceHash);
+	try {
+		const row = convertToTorrinUserTorrent(await addTorrinMagnet(trKey, hash), sourceHash);
+		if (callback) await callback(row);
+		if (!silent) {
+			toast.success(
+				row.status === UserTorrentStatus.finished
+					? 'On Torrin — ready.'
+					: 'Added to Torrin — downloading.',
+				magnetToastOptions
+			);
+		}
+	} catch (error) {
+		console.error(
+			'Error adding magnet to Torrin:',
+			error instanceof TorrinError ? error.code : 'unknown'
+		);
+		if (!silent)
+			toast.error(trErrorMessage(error) ?? 'Failed to add to Torrin.', magnetToastOptions);
+		throw error;
+	} finally {
+		trAddsInFlight.delete(sourceHash);
+	}
+};
+
+/**
+ * Adds many magnets or hashes to Torrin, one request each. A refusal of the
+ * account (`isTorrinAccountRefusal`) stops the sweep and says why; a refusal of
+ * one release, such as one that needs a paid plan, is counted and skipped.
+ */
+export const handleAddMultipleHashesInTr = async (
+	trKey: string,
+	sources: string[],
+	callback?: () => Promise<void>
+) => {
+	// Claimed before the first await, so a second sweep started meanwhile skips them.
+	const mine: string[] = [];
+	const valid: string[] = [];
+	let refused = 0;
+	for (const source of sources) {
+		const hash = extractTorrentInputs(source)[0]?.hash;
+		if (!hash || !isValidHash(hash)) refused++;
+		else if (!trAddsInFlight.has(hash) && !mine.includes(hash)) {
+			trAddsInFlight.add(hash);
+			mine.push(hash);
+			valid.push(source);
+		}
+	}
+	let added = 0;
+	let stoppedBy: string | null = null;
+	try {
+		for (let i = 0; i < valid.length; i++) {
+			if (i > 0) await delay(TR_BATCH_DELAY);
+			try {
+				await addTorrinMagnet(trKey, valid[i]);
+				added++;
+			} catch (error) {
+				console.error(
+					'Error adding magnets to Torrin:',
+					error instanceof TorrinError ? error.code : 'unknown'
+				);
+				if (isTorrinAccountRefusal(error)) {
+					stoppedBy = trErrorMessage(error) ?? 'Torrin refused the request.';
+					break;
+				}
+				refused++;
+			}
+		}
+	} finally {
+		mine.forEach((hash) => trAddsInFlight.delete(hash));
+	}
+	if (callback) await callback();
+	const parts = [`Added ${added} to Torrin`];
+	if (refused > 0) parts.push(`${refused} refused`);
+	toast(`${parts.join(' — ')}.`, magnetToastOptions);
 	if (stoppedBy) toast.error(`${stoppedBy} Stopped early.`, magnetToastOptions);
 };

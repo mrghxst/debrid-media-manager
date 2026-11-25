@@ -3,6 +3,7 @@ import { checkOffcloudCache } from '@/services/offcloud';
 import { checkPremiumizeCache } from '@/services/premiumize';
 import { RD_ADD_MIN_SPACING_MS, RD_BULK_ADD_SPACING_MS } from '@/services/realDebrid';
 import { checkCachedStatus } from '@/services/torbox';
+import { checkTorrinCache } from '@/services/torrin';
 import type { UserTorrent } from '@/torrent/userTorrent';
 import { runConcurrentFunctions } from '@/utils/batch';
 import { isRdBlockedName } from '@/utils/deInfringe';
@@ -23,7 +24,7 @@ import axios from 'axios';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AddRdOptions, CachedAddService } from './useTorrentManagement';
 
-/** Every service with a cache signal: RD, AD and DL from DMM's tables, TB/PM/OC probed. */
+/** Every service with a cache signal: RD, AD and DL from DMM's tables, TB/PM/OC/TR probed. */
 export type SeasonAdderService = CachedAddService;
 
 /** The per-user keys a cache probe needs. RD, AD and DL are answered from DMM's own tables. */
@@ -31,6 +32,7 @@ export type SeasonAdderKeys = {
 	tb?: string | null;
 	pm?: string | null;
 	oc?: string | null;
+	tr?: string | null;
 };
 
 /** What happened to one season during a run, for the season navigation to show. */
@@ -108,6 +110,7 @@ const asSearchResult = (candidate: ApiCandidate, service: SeasonAdderService): S
 	pmAvailable: service === 'pm',
 	ocAvailable: service === 'oc',
 	dlAvailable: service === 'dl',
+	trAvailable: service === 'tr',
 	files: candidate.files ?? [],
 	rdFiles: service === 'rd' ? candidate.files : undefined,
 	tbFiles: service === 'tb' ? candidate.files : undefined,
@@ -257,6 +260,31 @@ export function useSeasonPackAdder({
 					const hit = cached.get(candidate.hash.toLowerCase());
 					if (!hit) return null;
 					return { ...candidate, videoCount: hit.videoCount, files: hit.files };
+				});
+			}
+
+			// Torrin lists a cached release's files, like TorBox, and only its
+			// `cached` answer counts. Names and sizes are kept; each file's
+			// signed stream link is not.
+			if (service === 'tr') {
+				const results = await checkTorrinCache(key, [...hashes]);
+				const cached = new Map<string, FileData[]>();
+				for (const result of results) {
+					if (result.status !== 'cached') continue;
+					cached.set(
+						result.hash,
+						result.files.map((file) => ({
+							fileId: file.index,
+							filename: file.name,
+							filesize: typeof file.size === 'number' ? file.size : 0,
+						}))
+					);
+				}
+				return narrow((candidate) => {
+					const files = cached.get(candidate.hash.toLowerCase());
+					if (!files) return null;
+					const videoCount = files.filter((f) => isVideo({ path: f.filename })).length;
+					return { ...candidate, videoCount, files };
 				});
 			}
 

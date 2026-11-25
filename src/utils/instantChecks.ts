@@ -2,6 +2,7 @@ import { EnrichedHashlistTorrent, FileData, SearchResult } from '@/services/medi
 import { checkOffcloudCache } from '@/services/offcloud';
 import { checkPremiumizeCache } from '@/services/premiumize';
 import { checkCachedStatus } from '@/services/torbox';
+import { checkTorrinCache } from '@/services/torrin';
 import { delay } from '@/utils/delay';
 import { Dispatch, SetStateAction } from 'react';
 import { toast } from 'react-hot-toast';
@@ -455,6 +456,58 @@ const processOcInstantCheck = async <T extends SearchResult | EnrichedHashlistTo
 	return instantCount;
 };
 
+/**
+ * Torrin instant check.
+ *
+ * One read-only request per `CACHE_CHECK_CHUNK_SIZE` hashes, which adds nothing
+ * to the account, so it runs in the page's own sweep like Premiumize's and
+ * Offcloud's. Torrin answers every hash with one of three statuses, and **only
+ * `cached` counts**: `acceleratable` was measured to come back for every hash
+ * asked, random ones included (see `TORRIN_CACHE_STATUSES`).
+ *
+ * A cached answer lists the files, with sizes, so a row scraped without one
+ * gets its size from them. The files are not kept: each carries a signed
+ * stream link, good for a day, that works as a key to the file.
+ */
+const processTrInstantCheck = async <T extends SearchResult | EnrichedHashlistTorrent>(
+	trKey: string,
+	hashes: string[],
+	setTorrentList: Dispatch<SetStateAction<T[]>>,
+	sortFn?: (results: T[]) => T[]
+): Promise<number> => {
+	const results = await checkTorrinCache(trKey, hashes);
+	const sizes = new Map<string, number>();
+	for (const result of results) {
+		if (result.status !== 'cached') continue;
+		const bytes = result.files.reduce(
+			(acc, file) => acc + (typeof file.size === 'number' && file.size > 0 ? file.size : 0),
+			0
+		);
+		sizes.set(result.hash.toLowerCase(), bytes);
+	}
+	if (sizes.size === 0) return 0;
+
+	let instantCount = 0;
+	setTorrentList((prevSearchResults) => {
+		const newSearchResults = [...prevSearchResults];
+		for (const torrent of newSearchResults) {
+			if (torrent.noVideos) continue;
+			const bytes = sizes.get(torrent.hash.toLowerCase());
+			if (bytes === undefined) continue;
+
+			torrent.trAvailable = true;
+			instantCount += 1;
+			if ('medianFileSize' in torrent) {
+				const result = torrent as SearchResult;
+				if (result.fileSize <= 0 && bytes > 0) result.fileSize = bytes / 1024 / 1024;
+			}
+		}
+		return sortFn ? sortFn(newSearchResults) : newSearchResults;
+	});
+
+	return instantCount;
+};
+
 // Wrapper functions
 export const wrapLoading = async function (debrid: string, checkAvailability: Promise<number>) {
 	return await toast.promise(
@@ -633,3 +686,16 @@ export const checkAvailabilityOc2 = (
 	hashes: string[],
 	setTorrentList: Dispatch<SetStateAction<EnrichedHashlistTorrent[]>>
 ) => processOcInstantCheck(ocKey, hashes, setTorrentList);
+
+export const checkAvailabilityTr = (
+	trKey: string,
+	hashes: string[],
+	setTorrentList: Dispatch<SetStateAction<SearchResult[]>>,
+	sortFn: (searchResults: SearchResult[]) => SearchResult[]
+) => processTrInstantCheck(trKey, hashes, setTorrentList, sortFn);
+
+export const checkAvailabilityTr2 = (
+	trKey: string,
+	hashes: string[],
+	setTorrentList: Dispatch<SetStateAction<EnrichedHashlistTorrent[]>>
+) => processTrInstantCheck(trKey, hashes, setTorrentList);

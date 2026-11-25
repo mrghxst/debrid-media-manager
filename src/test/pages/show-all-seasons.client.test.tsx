@@ -42,6 +42,7 @@ const {
 			tb: 'tb-token' as string | null,
 			pm: null as string | null,
 			oc: null as string | null,
+			tr: null as string | null,
 		},
 		seasonStateMock: {} as Record<number, string>,
 	};
@@ -92,7 +93,7 @@ vi.mock('@/contexts/LibraryCacheContext', () => ({
 // Mirrors the auth hooks below: the Torrents tab is only for a debrid account.
 vi.mock('@/utils/guestMode', async (importOriginal) => ({
 	...(await importOriginal<typeof import('@/utils/guestMode')>()),
-	hasDebridAccount: () => !!(keys.rd || keys.ad || keys.tb || keys.pm || keys.oc),
+	hasDebridAccount: () => !!(keys.rd || keys.ad || keys.tb || keys.pm || keys.oc || keys.tr),
 }));
 
 vi.mock('@/hooks/auth', () => ({
@@ -103,6 +104,7 @@ vi.mock('@/hooks/auth', () => ({
 	useOffcloudApiKey: () => keys.oc,
 	useDebridLinkCredential: () => null,
 	usePutioAccessToken: () => null,
+	useTorrinApiKey: () => keys.tr,
 }));
 
 vi.mock('@/hooks/useSeasonPackAdder', () => ({
@@ -320,6 +322,7 @@ describe('All Seasons buttons', () => {
 		keys.tb = 'tb-token';
 		keys.pm = null;
 		keys.oc = null;
+		keys.tr = null;
 		localStorage.removeItem('settings:instantService');
 		for (const key of Object.keys(seasonStateMock)) delete seasonStateMock[key as never];
 		runMock.mockResolvedValue({
@@ -522,6 +525,7 @@ describe('All Seasons buttons', () => {
 		['ad', 'AD', 'AllDebrid'],
 		['pm', 'PM', 'Premiumize'],
 		['oc', 'OC', 'Offcloud'],
+		['tr', 'TR', 'Torrin'],
 	] as const)('offers a %s-only user the same run', async (service, short, label) => {
 		keys.rd = null;
 		keys.tb = null;
@@ -544,6 +548,7 @@ describe('All Seasons buttons', () => {
 			tb: null,
 			pm: keys.pm,
 			oc: keys.oc,
+			tr: keys.tr,
 		});
 		expect(modalFireMock.mock.calls[0][0].title).toBe(`Add all seasons to ${label}?`);
 	});

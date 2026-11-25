@@ -99,5 +99,13 @@ describe('quickSearch', () => {
 			expect(quickSearch('is:cached', withDl).map((r) => r.hash)).toContain('a8');
 			expect(quickSearch('is:uncached', withDl).map((r) => r.hash)).toEqual(['a5']);
 		});
+
+		it('counts a Torrin row as cached, under is:tr and is:cached alike', () => {
+			const withTr = [...availability, { title: 'In TR', hash: 'a9', trAvailable: true }];
+
+			expect(quickSearch('is:tr', withTr).map((r) => r.hash)).toEqual(['a9']);
+			expect(quickSearch('is:cached', withTr).map((r) => r.hash)).toContain('a9');
+			expect(quickSearch('is:uncached', withTr).map((r) => r.hash)).toEqual(['a5']);
+		});
 	});
 });

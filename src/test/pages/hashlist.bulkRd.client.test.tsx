@@ -55,6 +55,7 @@ vi.mock('@/hooks/auth', () => ({
 	useOffcloudApiKey: vi.fn(() => null),
 	useDebridLinkCredential: vi.fn(() => null),
 	usePutioAccessToken: vi.fn(() => null),
+	useTorrinApiKey: vi.fn(() => null),
 }));
 
 vi.mock('@/contexts/LibraryCacheContext', () => ({

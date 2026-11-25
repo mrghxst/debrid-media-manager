@@ -17,6 +17,7 @@ import {
 	usePutioAccessToken,
 	useRealDebridAccessToken,
 	useTorBoxAccessToken,
+	useTorrinApiKey,
 } from '@/hooks/auth';
 import { useAnimeEntries } from '@/hooks/useAnimeEntries';
 import { useAvailabilityCheck } from '@/hooks/useAvailabilityCheck';
@@ -41,6 +42,7 @@ import { markTransferredHashes } from '@/utils/debridUploader';
 import {
 	checkAvailabilityOc,
 	checkAvailabilityPm,
+	checkAvailabilityTr,
 	checkDatabaseAvailabilityAd,
 	checkDatabaseAvailabilityDl,
 	checkDatabaseAvailabilityRd,
@@ -191,6 +193,7 @@ const MovieSearch: FunctionComponent = () => {
 		pmAvailableCount?: number;
 		ocAvailableCount?: number;
 		dlAvailableCount?: number;
+		trAvailableCount?: number;
 		allSourcesCompleted: boolean;
 		pendingAvailabilityChecks: number;
 		isAvailabilityOnly?: boolean;
@@ -207,6 +210,7 @@ const MovieSearch: FunctionComponent = () => {
 	// or the `is:` filters.
 	const debridLinkKey = useDebridLinkCredential();
 	const putioKey = usePutioAccessToken();
+	const torrinKey = useTorrinApiKey();
 
 	/**
 	 * A user holding only Real-Debrid cannot start a transfer at all: the uploader
@@ -289,6 +293,8 @@ const MovieSearch: FunctionComponent = () => {
 		deleteDl,
 		addPt,
 		deletePt,
+		addTr,
+		deleteTr,
 	} = useTorrentManagement(
 		rdKey,
 		adKey,
@@ -299,7 +305,8 @@ const MovieSearch: FunctionComponent = () => {
 		imdbid as string,
 		searchResults,
 		setSearchResults,
-		putioKey
+		putioKey,
+		torrinKey
 	);
 
 	const { fetchMovieFromExternalSource, getEnabledSources } = useExternalSources(
@@ -328,7 +335,8 @@ const MovieSearch: FunctionComponent = () => {
 		addAd,
 		deleteRd,
 		deleteAd,
-		sortByBiggest
+		sortByBiggest,
+		torrinKey
 	);
 
 	const reporterKeys = {
@@ -497,6 +505,7 @@ const MovieSearch: FunctionComponent = () => {
 		let pmAvailableCount = 0;
 		let ocAvailableCount = 0;
 		let dlAvailableCount = 0;
+		let trAvailableCount = 0;
 		let pendingAvailabilityChecks = 0;
 		let allSourcesCompleted = false;
 		let finalResultCount = 0;
@@ -518,13 +527,15 @@ const MovieSearch: FunctionComponent = () => {
 					tbAvailableCount +
 					pmAvailableCount +
 					ocAvailableCount +
-					dlAvailableCount,
+					dlAvailableCount +
+					trAvailableCount,
 				rdAvailableCount,
 				adAvailableCount,
 				tbAvailableCount,
 				pmAvailableCount,
 				ocAvailableCount,
 				dlAvailableCount,
+				trAvailableCount,
 				allSourcesCompleted: true,
 				pendingAvailabilityChecks: 0,
 			});
@@ -584,7 +595,8 @@ const MovieSearch: FunctionComponent = () => {
 								!r.adAvailable &&
 								!r.tbAvailable &&
 								!r.pmAvailable &&
-								!r.ocAvailable
+								!r.ocAvailable &&
+								!r.trAvailable
 						)
 						.map((r) => r.hash);
 
@@ -683,6 +695,18 @@ const MovieSearch: FunctionComponent = () => {
 						pendingAvailabilityChecks--;
 						checkAndShowFinalToast();
 					});
+				}
+
+				if (torrinKey) {
+					pendingAvailabilityChecks++;
+					// Read-only, and only Torrin's `cached` answer counts.
+					checkAvailabilityTr(torrinKey, hashesToCheck, setSearchResults, keepOrder)
+						.catch(() => 0)
+						.then((count) => {
+							trAvailableCount += count;
+							pendingAvailabilityChecks--;
+							checkAndShowFinalToast();
+						});
 				}
 
 				if (torboxKey) {
@@ -813,7 +837,8 @@ const MovieSearch: FunctionComponent = () => {
 				!r.adAvailable &&
 				!r.tbAvailable &&
 				!r.pmAvailable &&
-				!r.ocAvailable
+				!r.ocAvailable &&
+				!r.trAvailable
 		).length;
 	}, [filteredResults]);
 
@@ -848,6 +873,7 @@ const MovieSearch: FunctionComponent = () => {
 			pmAvailableCount,
 			ocAvailableCount,
 			dlAvailableCount,
+			trAvailableCount,
 			allSourcesCompleted,
 			pendingAvailabilityChecks,
 			isAvailabilityOnly,
@@ -875,6 +901,8 @@ const MovieSearch: FunctionComponent = () => {
 				servicesWithCache.push(`OC: ${ocAvailableCount}`);
 			if (debridLinkKey && (dlAvailableCount ?? 0) > 0)
 				servicesWithCache.push(`DL: ${dlAvailableCount}`);
+			if (torrinKey && (trAvailableCount ?? 0) > 0)
+				servicesWithCache.push(`TR: ${trAvailableCount}`);
 
 			// Show toast for cached torrents if any found
 			if (totalAvailableCount > 0) {
@@ -896,6 +924,7 @@ const MovieSearch: FunctionComponent = () => {
 		premiumizeKey,
 		offcloudKey,
 		debridLinkKey,
+		torrinKey,
 		isAnyChecking,
 		isLibrarySyncing,
 		checkServiceAvailabilityBulk,
@@ -1193,6 +1222,7 @@ const MovieSearch: FunctionComponent = () => {
 							premiumizeKey={premiumizeKey}
 							offcloudKey={offcloudKey}
 							debridLinkKey={debridLinkKey}
+							torrinKey={torrinKey}
 							onMassReport={(type) => handleMassReport(type, filteredResults)}
 							mediaType="movie"
 							title={movieInfo.title}
@@ -1259,6 +1289,9 @@ const MovieSearch: FunctionComponent = () => {
 								putioKey={putioKey}
 								addPt={addPt}
 								deletePt={deletePt}
+								torrinKey={torrinKey}
+								addTr={addTr}
+								deleteTr={deleteTr}
 								imdbId={imdbid as string}
 								isHashServiceChecking={isHashServiceChecking}
 							/>

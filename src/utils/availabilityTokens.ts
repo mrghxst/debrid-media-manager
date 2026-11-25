@@ -7,6 +7,7 @@ export const AVAILABILITY_TOKENS = [
 	'is:tb',
 	'is:pm',
 	'is:oc',
+	'is:tr',
 	'is:cached',
 	'is:uncached',
 ] as const;
